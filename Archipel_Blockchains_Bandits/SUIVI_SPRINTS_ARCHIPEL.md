@@ -2,35 +2,36 @@
 
 ## Sprint 0 - Bootstrap & Architecture
 - Statut: termine
-- Objectif: poser une base propre et documentee
 - Realisations:
-  - arborescence projet creee (`src`, `docs`, `tests`, `scripts`, `demo`)
-  - `package.json` initialise
-  - `.gitignore` et `.env.example` crees
-  - constantes techniques de base dans `src/core/constants.js`
-  - CLI placeholder `src/cli/index.js`
-  - script `scripts/clean_state.sh`
-  - docs initiales (`README.md`, `docs/protocol-spec.md`, `docs/architecture.md`)
-- Validation:
-  - `npm run start -- --port 7777` OK (bootstrap message)
-  - `npm run clean:state` OK
+  - arborescence projet
+  - package/config de base
+  - docs initiales
 
 ## Sprint 1 - Couche reseau P2P
-- Statut: pending
-- Cible: discovery UDP + peer table + TCP
+- Statut: termine
+- Objectif: discovery UDP + peer table + TCP
+- Realisations:
+  - discovery multicast sur `239.255.42.99:6000`
+  - HELLO periodique + reception des pairs
+  - peer table persistable avec statut `online/stale`
+  - serveur TCP d'ecoute + reponse `PING -> PONG`
+  - CLI interactive (`peers`, `status`, `ping`, `exit`)
+  - smoke test 3 noeuds
+- Validation:
+  - `npm run test:smoke:s1` vert
 
 ## Sprint 2 - Chiffrement & Auth
 - Statut: pending
-- Cible: handshake, session key, E2E
+- Cible: Ed25519, X25519, HKDF, AES-GCM, trust store
 
 ## Sprint 3 - Chunking & Transfert
 - Statut: pending
-- Cible: manifest, chunk req/data, hash, reprise
+- Cible: manifest, chunks, hash, reprise
 
 ## Sprint 4 - Integration & Demo
 - Statut: pending
-- Cible: CLI complete, telemetry, tests, guide demo
+- Cible: CLI complete, telemetry, tests complets
 
 ## Buffer - Soumission
 - Statut: pending
-- Cible: final-submission + texte DevPost + tags sprint
+- Cible: docs finales, tags sprint, texte DevPost
