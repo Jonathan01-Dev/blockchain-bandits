@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "keys:generate": "node src/crypto/generate-keys.mjs"
+    "keys:generate": "node src/crypto/generate-keys.mjs",
+    "start": "node src/cli/archipel.mjs start",
+    "sprint1:check": "node demo/sprint1-check.mjs"
   }
 }

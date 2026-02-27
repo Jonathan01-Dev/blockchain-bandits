@@ -14,7 +14,7 @@
 | Sprint | Statut | Livrable cle | Preuve |
 |---|---|---|---|
 | S0 | Fait | README + architecture + format paquet + cles PKI | docs + script keys |
-| S1 | A faire | 3 noeuds detectes en <60s | - |
+| S1 | Fait | 3 noeuds detectes en <60s | npm run sprint1:check (peer_counts=2,2,2) |
 | S2 | A faire | message E2E chiffre | - |
 | S3 | A faire | transfert 50 Mo 3 noeuds | - |
 | S4 | A faire | demo <5 min + README final | - |
@@ -23,3 +23,4 @@
 ## Journal d'avancement redaction
 
 - [Sprint 0] Plan cree et aligne sur les consignes officielles.
+- [Sprint 1] Couche reseau P2P implementee (UDP discovery + PEER_LIST TCP TLV + peer table persistante + keepalive) et test 3 noeuds valide.

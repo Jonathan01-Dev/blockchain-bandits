@@ -4,7 +4,7 @@ Protocole P2P local, decentralise, chiffre, sans serveur central.
 
 ## Sprint courant
 
-- Sprint 0 termine
+- Sprint 1 termine
 
 ## Stack choisie (Sprint 0)
 
@@ -51,3 +51,19 @@ node src/crypto/generate-keys.mjs --node-name node-1 --force
 - Architecture documentee (`docs/architecture.md`)
 - Specification paquet minimale (`docs/protocol-spec.md`)
 - PKI locale: script de generation de cles (`src/crypto/generate-keys.mjs`)
+
+## Livrables Sprint 1
+
+- Couche discovery UDP multicast (`239.255.42.99:6000`) implementee
+- Peer table en memoire + persistance JSON (`.archipel/peers-*.json`)
+- Timeout pair mort (90s parametre)
+- Serveur TCP de reception + echange `PEER_LIST` en TLV (Type-Length-Value)
+- Keep-alive applicatif `PING/PONG` toutes les 15s
+- Affichage peer table en console (log periodique)
+- Verification 3 noeuds:
+
+```powershell
+npm run sprint1:check
+```
+
+Le script lance 3 noeuds locaux (`7777`, `7778`, `7779`) et valide que chaque noeud decouvre les 2 autres.
