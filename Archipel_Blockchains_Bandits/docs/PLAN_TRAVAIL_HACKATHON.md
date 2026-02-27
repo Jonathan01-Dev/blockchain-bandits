@@ -1,0 +1,25 @@
+# Plan de travail - Hackathon Archipel
+
+## Sprints
+
+- Sprint 0 (H+0 -> H+2): bootstrap et architecture
+- Sprint 1 (H+2 -> H+8): couche reseau P2P
+- Sprint 2 (H+8 -> H+13): chiffrement E2E et auth sans CA
+- Sprint 3 (H+13 -> H+19): chunking et transfert multi-noeuds
+- Sprint 4 (H+19 -> H+23): integration, CLI, README final
+- Buffer (H+23 -> H+24): soumission finale
+
+## Suivi execution
+
+| Sprint | Statut | Livrable cle | Preuve |
+|---|---|---|---|
+| S0 | Fait | README + architecture + format paquet + cles PKI | docs + script keys |
+| S1 | A faire | 3 noeuds detectes en <60s | - |
+| S2 | A faire | message E2E chiffre | - |
+| S3 | A faire | transfert 50 Mo 3 noeuds | - |
+| S4 | A faire | demo <5 min + README final | - |
+| Buffer | A faire | devpost + tag final-submission | - |
+
+## Journal d'avancement redaction
+
+- [Sprint 0] Plan cree et aligne sur les consignes officielles.

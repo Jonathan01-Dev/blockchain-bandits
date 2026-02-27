@@ -1,0 +1,6 @@
+.env
+.archipel/
+*.key
+*.pem
+*.log
+node_modules/
