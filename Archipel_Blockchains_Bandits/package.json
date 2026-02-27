@@ -1,0 +1,12 @@
+{
+  "name": "archipel-blockchains-bandits",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Archipel Hackathon - Sprint 0 bootstrap",
+  "type": "module",
+  "main": "src/cli/index.js",
+  "scripts": {
+    "start": "node src/cli/index.js start",
+    "clean:state": "bash scripts/clean_state.sh"
+  }
+}
