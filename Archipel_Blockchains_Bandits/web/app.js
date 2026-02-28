@@ -350,7 +350,7 @@ async function listerFichiers() {
   journal(`Fichiers listes pour ${nodeName}`);
 }
 
-function construirePeersDownload(noeudReceveur) {
+async function construirePeersDownload(noeudReceveur) {
   const manuel = elt("peersDownload").value
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -364,12 +364,24 @@ function construirePeersDownload(noeudReceveur) {
   }
   if (out.length > 0) return out;
 
+  const servicesParNoeud = new Map();
+  for (const n of NOEUDS) {
+    if (n.nom === noeudReceveur) continue;
+    try {
+      const outServices = await api(`/api/services?node=${encodeURIComponent(n.nom)}`);
+      servicesParNoeud.set(n.nom, outServices.services ?? []);
+    } catch {
+      servicesParNoeud.set(n.nom, []);
+    }
+  }
+
   for (const n of NOEUDS) {
     if (n.nom === noeudReceveur) continue;
     const nodeId = etat.nodeIds[n.nom];
     if (!nodeId) continue;
-    const cfg = lireConfigNoeud(n.nom);
-    out.push({ nodeId, host: "127.0.0.1", port: cfg.provider });
+    const providerSvc = (servicesParNoeud.get(n.nom) ?? []).find((s) => s.service === "provider");
+    if (!providerSvc?.running) continue;
+    out.push({ nodeId, host: "127.0.0.1", port: Number(providerSvc.port) });
   }
   return out;
 }
@@ -379,11 +391,16 @@ async function telechargerFichier() {
   const fileId = elt("fileIdDownload").value.trim();
   if (!fileId) throw new Error("file_id manquant");
 
+  const peers = await construirePeersDownload(nodeName);
+  if (peers.length === 0) {
+    throw new Error("Aucun provider actif detecte. Demarre au moins un service 'provider' sur un noeud source.");
+  }
+
   const out = await api("/api/download", "POST", {
     nodeName,
     fileId,
     providerPort: entierOuNull(elt("providerPortDownload").value),
-    peers: construirePeersDownload(nodeName),
+    peers,
     parallel: entierOuNull(elt("parallelDownload").value),
     timeoutMs: entierOuNull(elt("timeoutDownload").value),
   });
@@ -477,8 +494,16 @@ async function autoRemplirIds() {
     if (n.nom === rec) continue;
     const nodeId = etat.nodeIds[n.nom];
     if (!nodeId) continue;
-    const cfg = lireConfigNoeud(n.nom);
-    lignesPeers.push(`${nodeId}@127.0.0.1:${cfg.provider}`);
+    let providerPort = lireConfigNoeud(n.nom).provider;
+    try {
+      const outServices = await api(`/api/services?node=${encodeURIComponent(n.nom)}`);
+      const providerSvc = (outServices.services ?? []).find((s) => s.service === "provider");
+      if (!providerSvc?.running) continue;
+      providerPort = Number(providerSvc.port);
+    } catch {
+      // fallback config locale
+    }
+    lignesPeers.push(`${nodeId}@127.0.0.1:${providerPort}`);
   }
   if (lignesPeers.length > 0) elt("peersDownload").value = lignesPeers.join("\n");
 
