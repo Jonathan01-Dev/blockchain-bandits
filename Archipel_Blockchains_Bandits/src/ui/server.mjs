@@ -1,11 +1,19 @@
 import http from "node:http";
 import { readFileSync, existsSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 
 const PORT = Number(process.env.ARCHIPEL_UI_PORT ?? "8787");
 const webRoot = resolve("web");
 const cliPath = resolve("src/cli/archipel.mjs");
+const keysScriptPath = resolve("src/crypto/generate-keys.mjs");
+const serviceState = new Map();
+
+const SERVICE_SPECS = {
+  node: { cmd: "start", defaultPort: 7777 },
+  secure: { cmd: "secure-listen", defaultPort: 8802 },
+  provider: { cmd: "receive", defaultPort: 9931, extraArgs: ["--listen"] },
+};
 
 const contentTypeByExt = {
   ".html": "text/html; charset=utf-8",
@@ -17,13 +25,21 @@ const contentTypeByExt = {
 function parseBody(req) {
   return new Promise((resolvePromise, rejectPromise) => {
     let raw = "";
+    let done = false;
+    const fail = (err) => {
+      if (done) return;
+      done = true;
+      rejectPromise(err);
+    };
     req.on("data", (chunk) => {
       raw += chunk.toString("utf8");
       if (raw.length > 1024 * 1024) {
-        rejectPromise(new Error("request body too large"));
+        req.destroy();
+        fail(new Error("request body too large"));
       }
     });
     req.on("end", () => {
+      if (done) return;
       if (!raw) {
         resolvePromise({});
         return;
@@ -31,10 +47,10 @@ function parseBody(req) {
       try {
         resolvePromise(JSON.parse(raw));
       } catch {
-        rejectPromise(new Error("invalid JSON body"));
+        fail(new Error("invalid JSON body"));
       }
     });
-    req.on("error", rejectPromise);
+    req.on("error", fail);
   });
 }
 
@@ -56,6 +72,19 @@ function parseTableOutput(text) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function stringField(value, fallback = "") {
+  if (typeof value === "string") return value.trim();
+  if (value === null || value === undefined) return fallback;
+  return String(value).trim();
+}
+
+function numberField(value, fallback = null) {
+  if (value === null || value === undefined || value === "") return fallback;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return fallback;
+  return Math.floor(num);
 }
 
 function sendJson(res, statusCode, payload) {
@@ -80,8 +109,193 @@ function sendStatic(res, filePath) {
   }
 }
 
+function serviceKey(service, nodeName) {
+  return `${service}:${nodeName}`;
+}
+
+function pushServiceLog(entry, stream, chunk) {
+  const lines = String(chunk ?? "")
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  for (const line of lines) {
+    entry.logs.push(`[${stream}] ${line}`);
+    if (entry.logs.length > 300) entry.logs.shift();
+  }
+}
+
+function serializeService(entry) {
+  return {
+    service: entry.service,
+    nodeName: entry.nodeName,
+    port: entry.port,
+    running: Boolean(entry.proc && !entry.proc.killed && entry.exitCode === null),
+    pid: entry.proc?.pid ?? null,
+    startedAt: entry.startedAt,
+    exitCode: entry.exitCode,
+    signal: entry.signal,
+    recentLogs: entry.logs.slice(-25),
+  };
+}
+
+function getNodeServices(nodeName) {
+  return Object.keys(SERVICE_SPECS).map((service) => {
+    const entry = serviceState.get(serviceKey(service, nodeName));
+    if (!entry) {
+      return {
+        service,
+        nodeName,
+        port: null,
+        running: false,
+        pid: null,
+        startedAt: null,
+        exitCode: null,
+        signal: null,
+        recentLogs: [],
+      };
+    }
+    return serializeService(entry);
+  });
+}
+
+async function generateKeys(nodeName, force = true) {
+  const args = [keysScriptPath, "--node-name", nodeName];
+  if (force) args.push("--force");
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(process.execPath, args, { env: process.env }, (err, stdout, stderr) => {
+      if (err) {
+        const text = [stdout, stderr].filter(Boolean).join("\n").trim() || err.message;
+        rejectPromise(new Error(text));
+        return;
+      }
+      resolvePromise({ stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+function startService({ service, nodeName, port }) {
+  const spec = SERVICE_SPECS[service];
+  if (!spec) throw new Error(`unknown service: ${service}`);
+  const key = serviceKey(service, nodeName);
+  const existing = serviceState.get(key);
+  if (existing?.proc && !existing.proc.killed && existing.exitCode === null) return existing;
+
+  const resolvedPort = Number(port ?? spec.defaultPort);
+  const args = [cliPath, spec.cmd, "--node-name", nodeName, "--port", String(resolvedPort), ...(spec.extraArgs ?? [])];
+  const proc = spawn(process.execPath, args, {
+    env: process.env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const entry = {
+    service,
+    nodeName,
+    port: resolvedPort,
+    proc,
+    startedAt: Date.now(),
+    exitCode: null,
+    signal: null,
+    logs: [],
+  };
+  serviceState.set(key, entry);
+
+  proc.stdout?.on("data", (chunk) => pushServiceLog(entry, "out", chunk));
+  proc.stderr?.on("data", (chunk) => pushServiceLog(entry, "err", chunk));
+  proc.on("exit", (code, signal) => {
+    entry.exitCode = code;
+    entry.signal = signal;
+    entry.proc = null;
+  });
+  proc.on("error", (err) => {
+    pushServiceLog(entry, "err", err.message);
+    entry.exitCode = entry.exitCode ?? 1;
+    entry.proc = null;
+  });
+
+  return entry;
+}
+
+async function stopService({ service, nodeName }) {
+  const spec = SERVICE_SPECS[service];
+  if (!spec) throw new Error(`unknown service: ${service}`);
+  const key = serviceKey(service, nodeName);
+  const entry = serviceState.get(key);
+  if (!entry?.proc || entry.proc.killed || entry.exitCode !== null) return entry ?? null;
+
+  const proc = entry.proc;
+  proc.kill("SIGINT");
+
+  await new Promise((resolvePromise) => {
+    const timeout = setTimeout(() => {
+      try {
+        if (!proc.killed) proc.kill("SIGTERM");
+      } catch {
+        // no-op
+      }
+      resolvePromise();
+    }, 1200);
+    proc.once("exit", () => {
+      clearTimeout(timeout);
+      resolvePromise();
+    });
+  });
+
+  return entry;
+}
+
 async function handleApi(req, res, url) {
   try {
+    if (req.method === "GET" && url.pathname === "/api/services") {
+      const node = url.searchParams.get("node") ?? "machine-1";
+      sendJson(res, 200, { ok: true, services: getNodeServices(node) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/keys/generate") {
+      const body = await parseBody(req);
+      const node = stringField(body.nodeName, "machine-1");
+      const force = body.force !== false;
+      const out = await generateKeys(node, force);
+      sendJson(res, 200, { ok: true, raw: out.stdout || out.stderr || "keys generated" });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/services/start") {
+      const body = await parseBody(req);
+      const node = stringField(body.nodeName, "machine-1");
+      const service = stringField(body.service);
+
+      const servicesToStart = service
+        ? [service]
+        : ["node", "secure", "provider"];
+
+      for (const cur of servicesToStart) {
+        const portField = `${cur}Port`;
+        startService({
+          service: cur,
+          nodeName: node,
+          port: body[portField] ?? body.port,
+        });
+      }
+      sendJson(res, 200, { ok: true, services: getNodeServices(node) });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/services/stop") {
+      const body = await parseBody(req);
+      const node = stringField(body.nodeName, "machine-1");
+      const service = stringField(body.service);
+
+      const servicesToStop = service
+        ? [service]
+        : ["provider", "secure", "node"];
+
+      for (const cur of servicesToStop) {
+        await stopService({ service: cur, nodeName: node });
+      }
+      sendJson(res, 200, { ok: true, services: getNodeServices(node) });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/status") {
       const node = url.searchParams.get("node") ?? "machine-1";
       const out = await runCli(["status", "--node-name", node]);
@@ -98,7 +312,10 @@ async function handleApi(req, res, url) {
 
     if (req.method === "GET" && url.pathname === "/api/trust") {
       const node = url.searchParams.get("node") ?? "machine-1";
-      const out = await runCli(["trust", "--node-name", node]);
+      const nodeId = stringField(url.searchParams.get("nodeId"), "");
+      const args = ["trust", "--node-name", node];
+      if (nodeId) args.push("--node-id", nodeId);
+      const out = await runCli(args);
       sendJson(res, 200, { ok: true, lines: parseTableOutput(out.stdout), raw: out.stdout });
       return;
     }
@@ -113,10 +330,16 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/msg") {
       const body = await parseBody(req);
       const node = body.nodeName ?? "machine-1";
-      const toNodeId = body.toNodeId;
+      const toNodeId = stringField(body.toNodeId);
       const message = body.message ?? "hello";
+      if (!toNodeId) throw new Error("missing required field: toNodeId");
       const args = ["msg", toNodeId, message, "--node-name", node];
+      const toPort = numberField(body.toPort);
+      if (toPort) args.push("--to-port", String(toPort));
       if (body.noAi) args.push("--no-ai");
+      if (body.contextMessages !== undefined && body.contextMessages !== null && body.contextMessages !== "") {
+        args.push("--context-messages", String(body.contextMessages));
+      }
       const out = await runCli(args);
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
@@ -125,9 +348,17 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/send") {
       const body = await parseBody(req);
       const node = body.nodeName ?? "machine-1";
-      const toNodeId = body.toNodeId;
-      const filePath = body.filePath;
-      const out = await runCli(["send", toNodeId, filePath, "--node-name", node]);
+      const toNodeId = stringField(body.toNodeId);
+      const filePath = stringField(body.filePath);
+      if (!filePath) throw new Error("missing required field: filePath");
+      const args = ["send"];
+      if (toNodeId) args.push(toNodeId);
+      args.push(filePath, "--node-name", node);
+      const toPort = numberField(body.toPort);
+      if (toPort) args.push("--to-port", String(toPort));
+      const chunkSize = numberField(body.chunkSize);
+      if (chunkSize) args.push("--chunk-size", String(chunkSize));
+      const out = await runCli(args);
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
     }
@@ -135,8 +366,52 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/download") {
       const body = await parseBody(req);
       const node = body.nodeName ?? "machine-1";
-      const fileId = body.fileId;
-      const out = await runCli(["download", fileId, "--node-name", node]);
+      const fileId = stringField(body.fileId);
+      if (!fileId) throw new Error("missing required field: fileId");
+      const args = ["download", fileId, "--node-name", node];
+      const providerPort = numberField(body.providerPort);
+      if (providerPort) args.push("--provider-port", String(providerPort));
+      const parallel = numberField(body.parallel);
+      if (parallel) args.push("--parallel", String(parallel));
+      const timeoutMs = numberField(body.timeoutMs);
+      if (timeoutMs) args.push("--timeout-ms", String(timeoutMs));
+      const peers = Array.isArray(body.peers) ? body.peers : [];
+      for (const peer of peers) {
+        const nodeId = stringField(peer?.nodeId);
+        const host = stringField(peer?.host);
+        const port = numberField(peer?.port);
+        if (nodeId && host && port) {
+          args.push("--peer", `${nodeId}@${host}:${port}`);
+        }
+      }
+      const out = await runCli(args);
+      sendJson(res, 200, { ok: true, raw: out.stdout });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/trust/approve") {
+      const body = await parseBody(req);
+      const node = stringField(body.nodeName, "machine-1");
+      const targetNodeId = stringField(body.targetNodeId);
+      if (!targetNodeId) throw new Error("missing required field: targetNodeId");
+      const byNode = stringField(body.byNodeName, node);
+      const note = stringField(body.note);
+      const args = ["trust", "--node-name", node, "--approve", targetNodeId, "--by", byNode];
+      if (note) args.push("--note", note);
+      const out = await runCli(args);
+      sendJson(res, 200, { ok: true, raw: out.stdout });
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/trust/revoke") {
+      const body = await parseBody(req);
+      const node = stringField(body.nodeName, "machine-1");
+      const targetNodeId = stringField(body.targetNodeId);
+      if (!targetNodeId) throw new Error("missing required field: targetNodeId");
+      const byNode = stringField(body.byNodeName, node);
+      const reason = stringField(body.reason, "revocation manuelle");
+      const args = ["trust", "--node-name", node, "--revoke", targetNodeId, "--by", byNode, "--reason", reason];
+      const out = await runCli(args);
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
     }
@@ -144,9 +419,14 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/ask") {
       const body = await parseBody(req);
       const node = body.nodeName ?? "machine-1";
-      const prompt = body.prompt ?? "status";
+      const prompt = stringField(body.prompt, "status");
       const args = ["ask", "--prompt", prompt, "--node-name", node];
       if (body.noAi) args.push("--no-ai");
+      if (body.contextMessages !== undefined && body.contextMessages !== null && body.contextMessages !== "") {
+        args.push("--context-messages", String(body.contextMessages));
+      }
+      const context = stringField(body.context);
+      if (context) args.push("--context", context);
       const out = await runCli(args);
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
@@ -177,6 +457,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   sendStatic(res, filePath);
+});
+
+process.on("SIGINT", async () => {
+  const entries = [...serviceState.values()].filter((e) => e?.proc && !e.proc.killed && e.exitCode === null);
+  await Promise.allSettled(entries.map((e) => stopService({ service: e.service, nodeName: e.nodeName })));
+  process.exit(0);
 });
 
 server.listen(PORT, "127.0.0.1", () => {

@@ -1,23 +1,126 @@
-function nodeName() {
-  return document.getElementById("nodeName").value.trim() || "machine-1";
+const NOEUDS = [
+  { nom: "machine-1", tcp: 7777, secure: 8802, provider: 9931 },
+  { nom: "machine-2", tcp: 7778, secure: 8803, provider: 9932 },
+  { nom: "machine-3", tcp: 7779, secure: 8804, provider: 9933 },
+];
+
+const etat = {
+  nodeIds: {},
+  sortiePeers: {},
+  sortieFiles: {},
+};
+
+function elt(id) {
+  return document.getElementById(id);
 }
 
-function setOut(id, value) {
-  document.getElementById(id).textContent = value;
+function texte(id, valeur) {
+  elt(id).textContent = String(valeur ?? "");
 }
 
-function toast(message, error = false) {
-  const el = document.getElementById("toast");
-  el.classList.remove("hidden", "error");
-  if (error) el.classList.add("error");
-  el.textContent = message;
-  setTimeout(() => el.classList.add("hidden"), 2600);
+function journal(message) {
+  const zone = elt("journalUi");
+  const ligne = `[${new Date().toLocaleTimeString("fr-FR")}] ${message}`;
+  zone.textContent = `${ligne}\n${zone.textContent}`.trim();
 }
 
-function setBusy(buttonId, busy) {
-  const btn = document.getElementById(buttonId);
-  if (!btn) return;
-  btn.disabled = busy;
+function toast(message, erreur = false) {
+  const t = elt("toast");
+  t.classList.remove("cache", "erreur");
+  if (erreur) t.classList.add("erreur");
+  t.textContent = message;
+  setTimeout(() => t.classList.add("cache"), 2600);
+}
+
+function entierOuNull(v) {
+  const s = String(v ?? "").trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (!Number.isFinite(n)) return null;
+  return Math.floor(n);
+}
+
+function lireConfigNoeud(nom) {
+  const row = document.querySelector(`[data-noeud-row="${nom}"]`);
+  if (!row) {
+    const base = NOEUDS.find((n) => n.nom === nom);
+    return base ?? { nom, tcp: 7777, secure: 8802, provider: 9931 };
+  }
+  return {
+    nom,
+    tcp: entierOuNull(row.querySelector(".port-tcp").value) ?? 7777,
+    secure: entierOuNull(row.querySelector(".port-secure").value) ?? 8802,
+    provider: entierOuNull(row.querySelector(".port-provider").value) ?? 9931,
+  };
+}
+
+function remplirSelectNoeuds(id) {
+  const s = elt(id);
+  s.innerHTML = "";
+  for (const n of NOEUDS) {
+    const o = document.createElement("option");
+    o.value = n.nom;
+    o.textContent = n.nom;
+    s.appendChild(o);
+  }
+}
+
+function remplirSelectCibles(idSelect, noeudSource, valeurPreferee = "") {
+  const s = elt(idSelect);
+  const ancienneValeur = valeurPreferee || s.value;
+  s.innerHTML = "";
+
+  const cibles = NOEUDS.filter((n) => n.nom !== noeudSource);
+  for (const n of cibles) {
+    const o = document.createElement("option");
+    o.value = n.nom;
+    o.textContent = n.nom;
+    s.appendChild(o);
+  }
+
+  if (cibles.length === 0) return "";
+
+  const valeurValide = cibles.some((n) => n.nom === ancienneValeur)
+    ? ancienneValeur
+    : cibles[0].nom;
+  s.value = valeurValide;
+  return valeurValide;
+}
+
+function synchroniserCibleMessage() {
+  const noeudCible = elt("noeudMsgCible").value;
+  if (!noeudCible) return;
+  const nodeId = etat.nodeIds[noeudCible] ?? "";
+  elt("idMsgCible").value = nodeId;
+  elt("portMsgCible").value = String(lireConfigNoeud(noeudCible).secure);
+}
+
+function synchroniserCibleFichier() {
+  const noeudCible = elt("noeudSendCible").value;
+  if (!noeudCible) return;
+  const nodeId = etat.nodeIds[noeudCible] ?? "";
+  elt("idSendCible").value = nodeId;
+  elt("portSendCible").value = String(lireConfigNoeud(noeudCible).secure);
+}
+
+function extraireNodeId(sortieStatus) {
+  for (const ligne of String(sortieStatus ?? "").split("\n")) {
+    const m = ligne.match(/^node_id=(.+)$/);
+    if (m) return m[1].trim();
+  }
+  return "";
+}
+
+function extrairePremierFileId(sortieReceive) {
+  for (const ligne of String(sortieReceive ?? "").split("\n")) {
+    const m = ligne.trim().match(/^([a-f0-9]{64})\s+/i);
+    if (m) return m[1];
+  }
+  return "";
+}
+
+function choisirCibleParDefaut(noeudSource) {
+  return NOEUDS.find((n) => n.nom !== noeudSource) ?? NOEUDS[0];
 }
 
 async function api(path, method = "GET", body = null) {
@@ -27,182 +130,428 @@ async function api(path, method = "GET", body = null) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "request failed");
+  if (!json.ok) throw new Error(json.error || "requete echouee");
   return json;
 }
 
-async function probeApi() {
-  const pill = document.getElementById("apiHealth");
+async function testerApi() {
+  const pastille = elt("etatApi");
   try {
-    await api(`/api/status?node=${encodeURIComponent(nodeName())}`);
-    pill.textContent = "API connectee";
-    pill.style.color = "#0a7f60";
+    await api("/api/status?node=machine-1");
+    pastille.textContent = "API connectee";
+    pastille.classList.remove("ko");
+    pastille.classList.add("ok");
   } catch {
-    pill.textContent = "API indisponible";
-    pill.style.color = "#b4232e";
+    pastille.textContent = "API indisponible";
+    pastille.classList.remove("ok");
+    pastille.classList.add("ko");
   }
 }
 
-async function refreshStatus() {
-  setBusy("refreshStatus", true);
-  try {
-    const out = await api(`/api/status?node=${encodeURIComponent(nodeName())}`);
-    setOut("statusOut", out.raw || "(empty)");
-    toast("Status mis a jour");
-  } catch (err) {
-    setOut("statusOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("refreshStatus", false);
+function construireTableNoeuds() {
+  const tbody = document.querySelector("#tableNoeuds tbody");
+  tbody.innerHTML = "";
+
+  for (const n of NOEUDS) {
+    const tr = document.createElement("tr");
+    tr.setAttribute("data-noeud-row", n.nom);
+    tr.innerHTML = `
+      <td>${n.nom}</td>
+      <td><input class="port-tcp" type="number" min="1024" max="65535" value="${n.tcp}" /></td>
+      <td><input class="port-secure" type="number" min="1024" max="65535" value="${n.secure}" /></td>
+      <td><input class="port-provider" type="number" min="1024" max="65535" value="${n.provider}" /></td>
+      <td>
+        <div class="rangee">
+          <button data-action="keys" data-noeud="${n.nom}">Cles</button>
+          <button data-action="start" data-noeud="${n.nom}">Demarrer</button>
+          <button data-action="stop" data-noeud="${n.nom}" class="secondaire">Arreter</button>
+          <button data-action="status" data-noeud="${n.nom}" class="secondaire">Etat</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
   }
-}
 
-async function refreshPeers() {
-  setBusy("refreshPeers", true);
-  try {
-    const out = await api(`/api/peers?node=${encodeURIComponent(nodeName())}`);
-    setOut("peersOut", out.raw || "(empty)");
-    toast("Peers mis a jour");
-  } catch (err) {
-    setOut("peersOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("refreshPeers", false);
-  }
-}
-
-async function refreshTrust() {
-  setBusy("refreshTrust", true);
-  try {
-    const out = await api(`/api/trust?node=${encodeURIComponent(nodeName())}`);
-    setOut("trustOut", out.raw || "(empty)");
-    toast("Trust mis a jour");
-  } catch (err) {
-    setOut("trustOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("refreshTrust", false);
-  }
-}
-
-async function sendMsg() {
-  const toNodeId = document.getElementById("msgNodeId").value.trim();
-  const message = document.getElementById("msgText").value;
-  const noAi = document.getElementById("msgNoAi").checked;
-  setBusy("sendMsg", true);
-  try {
-    const out = await api("/api/msg", "POST", {
-      nodeName: nodeName(),
-      toNodeId,
-      message,
-      noAi,
-    });
-    setOut("msgOut", out.raw || "ok");
-    toast("Message envoye");
-  } catch (err) {
-    setOut("msgOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("sendMsg", false);
-  }
-}
-
-async function sendFile() {
-  const toNodeId = document.getElementById("sendNodeId").value.trim();
-  const filePath = document.getElementById("sendPath").value.trim();
-  setBusy("sendFile", true);
-  try {
-    const out = await api("/api/send", "POST", {
-      nodeName: nodeName(),
-      toNodeId,
-      filePath,
-    });
-    setOut("sendOut", out.raw || "ok");
-    toast("Fichier prepare");
-  } catch (err) {
-    setOut("sendOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("sendFile", false);
-  }
-}
-
-async function listFiles() {
-  setBusy("listFiles", true);
-  try {
-    const out = await api(`/api/files?node=${encodeURIComponent(nodeName())}`);
-    setOut("downloadOut", out.raw || "(empty)");
-    toast("Liste des fichiers chargee");
-  } catch (err) {
-    setOut("downloadOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("listFiles", false);
-  }
-}
-
-async function downloadFile() {
-  const fileId = document.getElementById("fileId").value.trim();
-  setBusy("downloadFile", true);
-  try {
-    const out = await api("/api/download", "POST", {
-      nodeName: nodeName(),
-      fileId,
-    });
-    setOut("downloadOut", out.raw || "ok");
-    toast("Download lance");
-  } catch (err) {
-    setOut("downloadOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("downloadFile", false);
-  }
-}
-
-async function ask() {
-  const prompt = document.getElementById("askPrompt").value.trim();
-  const noAi = document.getElementById("askNoAi").checked;
-  setBusy("askBtn", true);
-  try {
-    const out = await api("/api/ask", "POST", {
-      nodeName: nodeName(),
-      prompt,
-      noAi,
-    });
-    setOut("askOut", out.raw || "(empty)");
-    toast("Reponse recue");
-  } catch (err) {
-    setOut("askOut", err.message);
-    toast(err.message, true);
-  } finally {
-    setBusy("askBtn", false);
-  }
-}
-
-async function quickRefresh() {
-  await Promise.all([refreshStatus(), refreshPeers(), refreshTrust()]);
-}
-
-function wireSidebarButtons() {
-  document.querySelectorAll("[data-target]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const el = document.getElementById(btn.dataset.target);
-      if (!el) return;
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
+  tbody.querySelectorAll("button[data-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const action = btn.getAttribute("data-action");
+      const nom = btn.getAttribute("data-noeud");
+      try {
+        if (action === "keys") await genererCles(nom);
+        if (action === "start") await demarrerServicesNoeud(nom);
+        if (action === "stop") await arreterServicesNoeud(nom);
+        if (action === "status") await rafraichirEtatNoeud(nom);
+      } catch (err) {
+        toast(err.message, true);
+      }
     });
   });
 }
 
-document.getElementById("refreshStatus").addEventListener("click", refreshStatus);
-document.getElementById("refreshPeers").addEventListener("click", refreshPeers);
-document.getElementById("refreshTrust").addEventListener("click", refreshTrust);
-document.getElementById("quickRefresh").addEventListener("click", quickRefresh);
-document.getElementById("sendMsg").addEventListener("click", sendMsg);
-document.getElementById("sendFile").addEventListener("click", sendFile);
-document.getElementById("listFiles").addEventListener("click", listFiles);
-document.getElementById("downloadFile").addEventListener("click", downloadFile);
-document.getElementById("askBtn").addEventListener("click", ask);
+function afficherServicesBloc(resultats) {
+  const lignes = [];
+  for (const r of resultats) {
+    lignes.push(`== ${r.noeud} ==`);
+    for (const s of r.services ?? []) {
+      const etatTxt = s.running ? "en cours" : "arrete";
+      lignes.push(`${s.service}: ${etatTxt} port=${s.port ?? "-"} pid=${s.pid ?? "-"}`);
+      for (const l of s.recentLogs ?? []) lignes.push(`  ${l}`);
+    }
+  }
+  texte("sortieServices", lignes.join("\n"));
+}
 
-wireSidebarButtons();
-probeApi();
-quickRefresh();
+async function rafraichirServices() {
+  const resultats = [];
+  for (const n of NOEUDS) {
+    const out = await api(`/api/services?node=${encodeURIComponent(n.nom)}`);
+    resultats.push({ noeud: n.nom, services: out.services });
+  }
+  afficherServicesBloc(resultats);
+  journal("Services rafraichis");
+}
+
+async function genererCles(noeud) {
+  const out = await api("/api/keys/generate", "POST", { nodeName: noeud, force: true });
+  journal(`Cles regenerees pour ${noeud}`);
+  toast(`Cles generees pour ${noeud}`);
+  if (out.raw) texte("sortieServices", out.raw);
+}
+
+async function demarrerServicesNoeud(noeud) {
+  const cfg = lireConfigNoeud(noeud);
+  await api("/api/services/start", "POST", {
+    nodeName: noeud,
+    nodePort: cfg.tcp,
+    securePort: cfg.secure,
+    providerPort: cfg.provider,
+  });
+  journal(`Services demarres pour ${noeud} (tcp=${cfg.tcp}, secure=${cfg.secure}, provider=${cfg.provider})`);
+}
+
+async function arreterServicesNoeud(noeud) {
+  await api("/api/services/stop", "POST", { nodeName: noeud });
+  journal(`Services arretes pour ${noeud}`);
+}
+
+async function genererClesTout() {
+  for (const n of NOEUDS) await genererCles(n.nom);
+  await autoRemplirIds();
+}
+
+async function demarrerTout() {
+  for (const n of NOEUDS) await demarrerServicesNoeud(n.nom);
+  await rafraichirServices();
+  await autoRemplirIds();
+  toast("Tous les services sont demarres");
+}
+
+async function arreterTout() {
+  for (const n of [...NOEUDS].reverse()) await arreterServicesNoeud(n.nom);
+  await rafraichirServices();
+  toast("Tous les services sont arretes");
+}
+
+async function rafraichirEtatNoeud(noeud) {
+  const s = await api(`/api/status?node=${encodeURIComponent(noeud)}`);
+  const p = await api(`/api/peers?node=${encodeURIComponent(noeud)}`);
+  etat.nodeIds[noeud] = extraireNodeId(s.raw);
+  etat.sortiePeers[noeud] = p.raw;
+  if (elt("noeudEtat").value === noeud) {
+    texte("sortieEtat", s.raw || "(vide)");
+    texte("sortiePeers", p.raw || "(vide)");
+  }
+}
+
+async function rafraichirEtatSelection() {
+  const n = elt("noeudEtat").value;
+  await rafraichirEtatNoeud(n);
+  journal(`Etat + peers rafraichis pour ${n}`);
+}
+
+async function rafraichirTrust() {
+  const n = elt("noeudTrust").value;
+  const nodeId = elt("idTrustFiltre").value.trim();
+  const suffix = nodeId ? `&nodeId=${encodeURIComponent(nodeId)}` : "";
+  const out = await api(`/api/trust?node=${encodeURIComponent(n)}${suffix}`);
+  texte("sortieTrust", out.raw || "(vide)");
+  journal(`Trust rafraichi pour ${n}${nodeId ? ` filtre=${nodeId.slice(0, 12)}` : ""}`);
+}
+
+async function approuverTrust() {
+  const nodeName = elt("noeudTrust").value;
+  const targetNodeId = elt("idTrustCible").value.trim();
+  if (!targetNodeId) throw new Error("node_id cible manquant pour trust");
+
+  const out = await api("/api/trust/approve", "POST", {
+    nodeName,
+    targetNodeId,
+    byNodeName: nodeName,
+    note: elt("noteTrust").value.trim(),
+  });
+  texte("sortieTrust", out.raw || "ok");
+  journal(`Trust approuve: ${nodeName} -> ${targetNodeId.slice(0, 12)}`);
+}
+
+async function revoquerTrust() {
+  const nodeName = elt("noeudTrust").value;
+  const targetNodeId = elt("idTrustCible").value.trim();
+  if (!targetNodeId) throw new Error("node_id cible manquant pour revocation");
+
+  const out = await api("/api/trust/revoke", "POST", {
+    nodeName,
+    targetNodeId,
+    byNodeName: nodeName,
+    reason: elt("raisonTrust").value.trim() || "revocation manuelle",
+  });
+  texte("sortieTrust", out.raw || "ok");
+  journal(`Trust revoque: ${nodeName} -> ${targetNodeId.slice(0, 12)}`);
+}
+
+async function envoyerMessage() {
+  const nodeName = elt("noeudMsg").value;
+  const toNodeId = elt("idMsgCible").value.trim();
+  if (!toNodeId) throw new Error("node_id cible manquant");
+
+  const out = await api("/api/msg", "POST", {
+    nodeName,
+    toNodeId,
+    toPort: entierOuNull(elt("portMsgCible").value),
+    message: elt("texteMsg").value,
+    noAi: elt("flagNoAiMsg").checked,
+    contextMessages: entierOuNull(elt("ctxMsg").value),
+  });
+  texte("sortieMsg", out.raw || "ok");
+  journal(`Message envoye ${nodeName} -> ${toNodeId.slice(0, 12)}`);
+}
+
+async function envoyerFichier() {
+  const nodeName = elt("noeudSend").value;
+  const filePath = elt("cheminFichier").value.trim();
+  if (!filePath) throw new Error("chemin fichier manquant");
+
+  const out = await api("/api/send", "POST", {
+    nodeName,
+    toNodeId: elt("idSendCible").value.trim(),
+    toPort: entierOuNull(elt("portSendCible").value),
+    filePath,
+    chunkSize: entierOuNull(elt("tailleChunk").value),
+  });
+  texte("sortieSend", out.raw || "ok");
+  journal(`Fichier prepare depuis ${nodeName}`);
+}
+
+async function listerFichiers() {
+  const nodeName = elt("noeudReceive").value;
+  const out = await api(`/api/files?node=${encodeURIComponent(nodeName)}`);
+  etat.sortieFiles[nodeName] = out.raw || "";
+  texte("sortieReceive", out.raw || "(vide)");
+  journal(`Fichiers listes pour ${nodeName}`);
+}
+
+function construirePeersDownload(noeudReceveur) {
+  const manuel = elt("peersDownload").value
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const out = [];
+  for (const ligne of manuel) {
+    const m = ligne.match(/^(.+?)@([^:]+):(\d+)$/);
+    if (!m) continue;
+    out.push({ nodeId: m[1], host: m[2], port: Number(m[3]) });
+  }
+  if (out.length > 0) return out;
+
+  for (const n of NOEUDS) {
+    if (n.nom === noeudReceveur) continue;
+    const nodeId = etat.nodeIds[n.nom];
+    if (!nodeId) continue;
+    const cfg = lireConfigNoeud(n.nom);
+    out.push({ nodeId, host: "127.0.0.1", port: cfg.provider });
+  }
+  return out;
+}
+
+async function telechargerFichier() {
+  const nodeName = elt("noeudReceive").value;
+  const fileId = elt("fileIdDownload").value.trim();
+  if (!fileId) throw new Error("file_id manquant");
+
+  const out = await api("/api/download", "POST", {
+    nodeName,
+    fileId,
+    providerPort: entierOuNull(elt("providerPortDownload").value),
+    peers: construirePeersDownload(nodeName),
+    parallel: entierOuNull(elt("parallelDownload").value),
+    timeoutMs: entierOuNull(elt("timeoutDownload").value),
+  });
+  texte("sortieDownload", out.raw || "ok");
+  journal(`Download lance pour ${nodeName}`);
+}
+
+async function interrogerGemini() {
+  const nodeName = elt("noeudAsk").value;
+  const prompt = elt("promptAsk").value.trim();
+  if (!prompt) throw new Error("question Gemini manquante");
+
+  const out = await api("/api/ask", "POST", {
+    nodeName,
+    prompt,
+    noAi: elt("flagNoAiAsk").checked,
+    contextMessages: entierOuNull(elt("ctxAskN").value),
+    context: elt("ctxAsk").value.trim(),
+  });
+  texte("sortieAsk", out.raw || "(vide)");
+  journal(`Gemini execute pour ${nodeName}`);
+}
+
+async function autoRemplirIds() {
+  for (const n of NOEUDS) {
+    try {
+      await rafraichirEtatNoeud(n.nom);
+    } catch {
+      // noop
+    }
+  }
+
+  const sourceMsg = elt("noeudMsg").value;
+  const sourceSend = elt("noeudSend").value;
+  const sourceTrust = elt("noeudTrust").value;
+
+  const cibleMsg = choisirCibleParDefaut(sourceMsg);
+  const cibleSend = choisirCibleParDefaut(sourceSend);
+  const cibleTrust = choisirCibleParDefaut(sourceTrust);
+
+  if (cibleMsg) {
+    remplirSelectCibles("noeudMsgCible", sourceMsg, cibleMsg.nom);
+    synchroniserCibleMessage();
+  }
+  if (cibleMsg && etat.nodeIds[cibleMsg.nom]) {
+    elt("idMsgCible").value = etat.nodeIds[cibleMsg.nom];
+    elt("portMsgCible").value = String(lireConfigNoeud(cibleMsg.nom).secure);
+  }
+  if (cibleSend) {
+    remplirSelectCibles("noeudSendCible", sourceSend, cibleSend.nom);
+    synchroniserCibleFichier();
+  }
+  if (cibleSend && etat.nodeIds[cibleSend.nom]) {
+    elt("idSendCible").value = etat.nodeIds[cibleSend.nom];
+    elt("portSendCible").value = String(lireConfigNoeud(cibleSend.nom).secure);
+  }
+  if (cibleTrust && etat.nodeIds[cibleTrust.nom]) {
+    elt("idTrustCible").value = etat.nodeIds[cibleTrust.nom];
+    elt("idTrustFiltre").value = etat.nodeIds[cibleTrust.nom];
+  }
+
+  const rec = elt("noeudReceive").value;
+  if (rec) {
+    try {
+      await listerFichiers();
+      const fid = extrairePremierFileId(etat.sortieFiles[rec]);
+      if (fid) elt("fileIdDownload").value = fid;
+    } catch {
+      // noop
+    }
+  }
+
+  const lignesPeers = [];
+  for (const n of NOEUDS) {
+    if (n.nom === rec) continue;
+    const nodeId = etat.nodeIds[n.nom];
+    if (!nodeId) continue;
+    const cfg = lireConfigNoeud(n.nom);
+    lignesPeers.push(`${nodeId}@127.0.0.1:${cfg.provider}`);
+  }
+  if (lignesPeers.length > 0) elt("peersDownload").value = lignesPeers.join("\n");
+
+  journal("Champs auto-remplis (node_id, ports, file_id, peers)");
+  toast("Auto-remplissage termine");
+}
+
+function lierEvenements() {
+  elt("btnRafraichirServices").addEventListener("click", () => executer("Rafraichir services", rafraichirServices));
+  elt("btnGenererTout").addEventListener("click", () => executer("Generer celes", genererClesTout));
+  elt("btnDemarrerTout").addEventListener("click", () => executer("Demarrer tout", demarrerTout));
+  elt("btnArreterTout").addEventListener("click", () => executer("Arreter tout", arreterTout));
+  elt("btnAutoRemplir").addEventListener("click", () => executer("Auto-remplir", autoRemplirIds));
+
+  elt("btnRefreshEtat").addEventListener("click", () => executer("Rafraichir etat", rafraichirEtatSelection));
+  elt("btnRefreshTrust").addEventListener("click", () => executer("Rafraichir trust", rafraichirTrust));
+  elt("btnTrustApprove").addEventListener("click", () => executer("Trust approve", approuverTrust));
+  elt("btnTrustRevoke").addEventListener("click", () => executer("Trust revoke", revoquerTrust));
+
+  elt("btnEnvoyerMsg").addEventListener("click", () => executer("Envoyer message", envoyerMessage));
+  elt("btnSend").addEventListener("click", () => executer("Envoyer fichier", envoyerFichier));
+  elt("btnListerFichiers").addEventListener("click", () => executer("Lister fichiers", listerFichiers));
+  elt("btnAutoFileId").addEventListener("click", () => {
+    const rec = elt("noeudReceive").value;
+    const fid = extrairePremierFileId(etat.sortieFiles[rec]);
+    if (fid) {
+      elt("fileIdDownload").value = fid;
+      toast("file_id rempli");
+    } else {
+      toast("Aucun file_id detecte", true);
+    }
+  });
+  elt("btnDownload").addEventListener("click", () => executer("Download", telechargerFichier));
+
+  elt("btnAsk").addEventListener("click", () => executer("Gemini", interrogerGemini));
+
+  ["noeudEtat", "noeudMsg", "noeudSend", "noeudTrust", "noeudReceive", "noeudAsk"].forEach((id) => {
+    elt(id).addEventListener("change", () => {
+      if (id === "noeudEtat") executer("Rafraichir etat", rafraichirEtatSelection);
+      if (id === "noeudMsg") {
+        remplirSelectCibles("noeudMsgCible", elt("noeudMsg").value);
+        synchroniserCibleMessage();
+      }
+      if (id === "noeudSend") {
+        remplirSelectCibles("noeudSendCible", elt("noeudSend").value);
+        synchroniserCibleFichier();
+      }
+    });
+  });
+  elt("noeudMsgCible").addEventListener("change", synchroniserCibleMessage);
+  elt("noeudSendCible").addEventListener("change", synchroniserCibleFichier);
+}
+
+async function executer(etiquette, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    const msg = err?.message || String(err);
+    toast(msg, true);
+    journal(`${etiquette} en echec: ${msg}`);
+  }
+}
+
+async function init() {
+  construireTableNoeuds();
+  remplirSelectNoeuds("noeudEtat");
+  remplirSelectNoeuds("noeudTrust");
+  remplirSelectNoeuds("noeudMsg");
+  remplirSelectNoeuds("noeudSend");
+  remplirSelectNoeuds("noeudMsgCible");
+  remplirSelectNoeuds("noeudSendCible");
+  remplirSelectNoeuds("noeudReceive");
+  remplirSelectNoeuds("noeudAsk");
+
+  elt("noeudEtat").value = "machine-1";
+  elt("noeudTrust").value = "machine-1";
+  elt("noeudMsg").value = "machine-1";
+  elt("noeudSend").value = "machine-1";
+  remplirSelectCibles("noeudMsgCible", "machine-1", "machine-2");
+  remplirSelectCibles("noeudSendCible", "machine-1", "machine-2");
+  elt("noeudReceive").value = "machine-2";
+  elt("noeudAsk").value = "machine-1";
+
+  lierEvenements();
+  await testerApi();
+  await executer("Rafraichir services", rafraichirServices);
+  await executer("Rafraichir etat", rafraichirEtatSelection);
+  await executer("Rafraichir trust", rafraichirTrust);
+  await executer("Auto-remplir", autoRemplirIds);
+  journal("Interface initialisee");
+}
+
+init();

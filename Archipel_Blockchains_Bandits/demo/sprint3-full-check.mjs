@@ -68,6 +68,7 @@ const sourceManifest = stageFileForTransfer({
 });
 const sourceChunkDir = join(root, "source", "chunks", sourceManifest.file_id);
 const split = assignTwoCopies(sourceManifest.nb_chunks);
+const basePort = Math.max(20000, Number(process.env.SPRINT3_FULL_BASE_PORT ?? String(39000 + (process.pid % 1000))));
 
 const m1 = materializePeerChunks({
   peerDir: join(root, "seed1"),
@@ -103,70 +104,76 @@ const s1Node = new ChunkTransferNode({
   privateKey: seed1.privateKey,
   publicPem: seed1.publicPem,
   indexStore: s1Index,
-  port: 9931,
+  port: basePort,
 });
 const s2Node = new ChunkTransferNode({
   nodeId: seed2.nodeId,
   privateKey: seed2.privateKey,
   publicPem: seed2.publicPem,
   indexStore: s2Index,
-  port: 9932,
+  port: basePort + 1,
 });
 const s3Node = new ChunkTransferNode({
   nodeId: seed3.nodeId,
   privateKey: seed3.privateKey,
   publicPem: seed3.publicPem,
   indexStore: s3Index,
-  port: 9933,
+  port: basePort + 2,
 });
 const dNode = new ChunkTransferNode({
   nodeId: leech.nodeId,
   privateKey: leech.privateKey,
   publicPem: leech.publicPem,
   indexStore: dIndex,
-  port: 9934,
+  port: basePort + 3,
 });
 
-await s1Node.start();
-await s2Node.start();
-await s3Node.start();
-await dNode.start();
+let killer = null;
+let result = null;
+let ms = 0;
 
-const killer = setTimeout(async () => {
-  await s2Node.stop();
-  console.log("seed2 disconnected during transfer");
-}, 1200);
+try {
+  await s1Node.start();
+  await s2Node.start();
+  await s3Node.start();
+  await dNode.start();
 
-const t0 = performance.now();
-const mgr = new ChunkDownloadManager({
-  localChunkNode: dNode,
-  localNodeId: leech.nodeId,
-  manifest: sourceManifest,
-  peers: [
-    { node_id: seed1.nodeId, host: "127.0.0.1", port: 9931 },
-    { node_id: seed2.nodeId, host: "127.0.0.1", port: 9932 },
-    { node_id: seed3.nodeId, host: "127.0.0.1", port: 9933 },
-  ],
-  peerChunkMap: {
-    [seed1.nodeId]: split.seed1,
-    [seed2.nodeId]: split.seed2,
-    [seed3.nodeId]: split.seed3,
-  },
-  outputDir: join(root, "leech", "downloads"),
-  parallel: 3,
-});
-const result = await mgr.download();
-const ms = performance.now() - t0;
-clearTimeout(killer);
+  killer = setTimeout(async () => {
+    await s2Node.stop();
+    console.log("seed2 disconnected during transfer");
+  }, 1200);
 
-await s1Node.stop();
-await s3Node.stop();
-await dNode.stop();
+  const t0 = performance.now();
+  const mgr = new ChunkDownloadManager({
+    localChunkNode: dNode,
+    localNodeId: leech.nodeId,
+    manifest: sourceManifest,
+    peers: [
+      { node_id: seed1.nodeId, host: "127.0.0.1", port: basePort },
+      { node_id: seed2.nodeId, host: "127.0.0.1", port: basePort + 1 },
+      { node_id: seed3.nodeId, host: "127.0.0.1", port: basePort + 2 },
+    ],
+    peerChunkMap: {
+      [seed1.nodeId]: split.seed1,
+      [seed2.nodeId]: split.seed2,
+      [seed3.nodeId]: split.seed3,
+    },
+    outputDir: join(root, "leech", "downloads"),
+    parallel: 3,
+  });
+  result = await mgr.download();
+  ms = performance.now() - t0;
+} finally {
+  if (killer) clearTimeout(killer);
+  await Promise.allSettled([s1Node.stop(), s2Node.stop(), s3Node.stop(), dNode.stop()]);
+}
 
+if (!result) throw new Error("download did not produce a result");
 if (result.fileHash !== sourceManifest.file_id) throw new Error("final SHA mismatch");
 
 console.log(`file_hash=${result.fileHash}`);
 console.log(`size=${result.size}`);
 console.log(`source_mb=${fullMb}`);
 console.log(`duration_ms=${Math.round(ms)}`);
+console.log(`base_port=${basePort}`);
 console.log("Sprint 3 full check passed");

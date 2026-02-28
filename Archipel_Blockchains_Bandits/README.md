@@ -120,6 +120,9 @@ Fonctions disponibles:
 - download par file_id
 - requete Gemini directe
 
+Mode d'emploi UI complet (FR):
+- `docs/MODE_D_EMPLOI_UI.md`
+
 ## Guide de demo jury (3 cas d'usage)
 
 ### Cas 1 - Decouverte P2P (Sprint 1)

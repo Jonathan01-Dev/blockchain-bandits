@@ -3,106 +3,185 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Archipel UI</title>
+    <title>Archipel - Banc de test complet</title>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
     <header class="hero">
-      <div class="hero-left">
-        <h1>Archipel Control Room</h1>
-        <p>Console web vanilla pour pilotage P2P, chat E2E et transferts</p>
+      <div>
+        <h1>Archipel - Banc de test local complet</h1>
+        <p>Interface de verification hors Internet (sauf Gemini si active)</p>
       </div>
-      <div class="hero-right">
-        <div class="status-pill" id="apiHealth">API inconnue</div>
-      </div>
+      <div id="etatApi" class="pastille">API inconnue</div>
     </header>
 
-    <main class="layout">
-      <aside class="sidebar card">
-        <h2>Pilotage</h2>
-        <div class="stack">
-          <label for="nodeName">Noeud actif</label>
-          <input id="nodeName" value="machine-1" />
-          <button id="quickRefresh">Refresh global</button>
+    <main class="grille">
+      <section class="carte large" id="labPanel">
+        <div class="titre-ligne">
+          <h2>1) Laboratoire local (multi-noeuds)</h2>
+          <button id="btnRafraichirServices">Rafraichir les services</button>
         </div>
-        <hr />
-        <div class="stack">
-          <button class="ghost" data-target="statusPanel">Etat</button>
-          <button class="ghost" data-target="networkPanel">Reseau</button>
-          <button class="ghost" data-target="chatPanel">Messagerie</button>
-          <button class="ghost" data-target="filesPanel">Fichiers</button>
-          <button class="ghost" data-target="aiPanel">Gemini</button>
+        <p class="aide">
+          Utilise ce panneau pour preparer un test complet sur une seule machine: genere les cles, lance les services,
+          puis teste discovery, chat chiffre, trust, transfert de fichier et download.
+        </p>
+
+        <table class="tableau" id="tableNoeuds">
+          <thead>
+            <tr>
+              <th>Noeud</th>
+              <th>Port reseau</th>
+              <th>Port secure-listen</th>
+              <th>Port provider</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="rangee actions-group">
+          <button id="btnGenererTout">Generer les cles (3 noeuds)</button>
+          <button id="btnDemarrerTout">Demarrer tous les services (3 noeuds)</button>
+          <button id="btnArreterTout" class="secondaire">Arreter tous les services (3 noeuds)</button>
+          <button id="btnAutoRemplir" class="secondaire">Auto-remplir les IDs et file_id</button>
         </div>
-      </aside>
 
-      <section class="content-grid">
-        <section class="card panel" id="statusPanel">
-          <div class="card-head">
-            <h2>Etat Local</h2>
-            <button id="refreshStatus">Refresh</button>
-          </div>
-          <pre id="statusOut"></pre>
-        </section>
+        <pre id="sortieServices"></pre>
+      </section>
 
-        <section class="card panel" id="networkPanel">
-          <div class="card-head">
-            <h2>Peers</h2>
-            <button id="refreshPeers">Refresh peers</button>
-          </div>
-          <pre id="peersOut"></pre>
-          <div class="card-head">
-            <h2>Trust Store</h2>
-            <button id="refreshTrust">Refresh trust</button>
-          </div>
-          <pre id="trustOut"></pre>
-        </section>
+      <section class="carte" id="etatPanel">
+        <div class="titre-ligne">
+          <h2>2) Etat et discovery</h2>
+          <button id="btnRefreshEtat">Rafraichir</button>
+        </div>
+        <div class="stack">
+          <label for="noeudEtat">Noeud observe</label>
+          <select id="noeudEtat"></select>
+        </div>
+        <pre id="sortieEtat"></pre>
+        <pre id="sortiePeers"></pre>
+      </section>
 
-        <section class="card panel" id="chatPanel">
-          <h2>Messagerie Chiffree</h2>
-          <div class="stack">
-            <input id="msgNodeId" placeholder="node_id cible" />
-            <textarea id="msgText" rows="3" placeholder='message (support /ask ... ou @archipel-ai ...)'></textarea>
-            <div class="row">
-              <label class="check"><input id="msgNoAi" type="checkbox" /> no-ai</label>
-              <button id="sendMsg">Envoyer</button>
+      <section class="carte" id="trustPanel">
+        <div class="titre-ligne">
+          <h2>3) Web of Trust</h2>
+          <button id="btnRefreshTrust">Rafraichir trust</button>
+        </div>
+        <div class="stack">
+          <label for="noeudTrust">Noeud local</label>
+          <select id="noeudTrust"></select>
+          <label for="idTrustCible">node_id cible</label>
+          <input id="idTrustCible" placeholder="node_id a approuver / revoquer" />
+          <label for="idTrustFiltre">Filtre trust (equiv. trust &lt;node_id&gt;)</label>
+          <input id="idTrustFiltre" placeholder="laisser vide pour tout afficher" />
+          <label for="noteTrust">Note d'approbation (optionnel)</label>
+          <input id="noteTrust" placeholder="note" />
+          <label for="raisonTrust">Raison de revocation</label>
+          <input id="raisonTrust" value="compromis" />
+        </div>
+        <div class="rangee">
+          <button id="btnTrustApprove">Approuver</button>
+          <button id="btnTrustRevoke" class="danger">Revoquer</button>
+        </div>
+        <pre id="sortieTrust"></pre>
+      </section>
+
+      <section class="carte" id="chatPanel">
+        <h2>4) Messagerie chiffree E2E</h2>
+        <div class="stack">
+          <label for="noeudMsg">Noeud emetteur</label>
+          <select id="noeudMsg"></select>
+          <label for="noeudMsgCible">Noeud cible (auto-remplissage)</label>
+          <select id="noeudMsgCible"></select>
+          <label for="idMsgCible">node_id cible</label>
+          <input id="idMsgCible" placeholder="node_id cible" />
+          <label for="portMsgCible">Port secure-listen cible</label>
+          <input id="portMsgCible" type="number" min="1024" max="65535" value="8802" />
+          <label for="texteMsg">Message</label>
+          <textarea id="texteMsg" rows="4" placeholder="Ex: Bonjour /ask resumer les echanges"></textarea>
+          <label for="ctxMsg">Contexte IA: derniers N messages (optionnel)</label>
+          <input id="ctxMsg" type="number" min="1" max="200" value="12" />
+          <label class="check"><input id="flagNoAiMsg" type="checkbox" /> Forcer mode sans IA (--no-ai)</label>
+        </div>
+        <button id="btnEnvoyerMsg">Envoyer message chiffre</button>
+        <pre id="sortieMsg"></pre>
+      </section>
+
+      <section class="carte large" id="fichierPanel">
+        <h2>5) Transfert de fichiers (chunk + offre + download)</h2>
+        <div class="double">
+          <div>
+            <h3>5.1 Preparer et notifier un fichier</h3>
+            <div class="stack">
+              <label for="noeudSend">Noeud source</label>
+              <select id="noeudSend"></select>
+              <label for="noeudSendCible">Noeud cible (auto-remplissage)</label>
+              <select id="noeudSendCible"></select>
+              <label for="idSendCible">node_id destinataire (optionnel)</label>
+              <input id="idSendCible" placeholder="laisser vide pour simple staging" />
+              <label for="portSendCible">Port secure-listen destinataire</label>
+              <input id="portSendCible" type="number" min="1024" max="65535" value="8802" />
+              <label for="cheminFichier">Chemin du fichier local</label>
+              <input id="cheminFichier" placeholder="C:\\...\\fichier.bin" />
+              <label for="tailleChunk">Taille chunk en octets</label>
+              <input id="tailleChunk" type="number" min="1024" value="524288" />
+              <button id="btnSend">Preparer + notifier</button>
             </div>
+            <pre id="sortieSend"></pre>
           </div>
-          <pre id="msgOut"></pre>
-        </section>
 
-        <section class="card panel" id="filesPanel">
-          <h2>Fichiers</h2>
-          <div class="stack">
-            <input id="sendNodeId" placeholder="node_id cible (optionnel)" />
-            <input id="sendPath" placeholder="/chemin/vers/fichier.bin" />
-            <button id="sendFile">Prepare + notify</button>
-          </div>
-          <pre id="sendOut"></pre>
-          <div class="stack">
-            <input id="fileId" placeholder="file_id" />
-            <div class="row">
-              <button id="downloadFile">Download</button>
-              <button id="listFiles">List local files</button>
+          <div>
+            <h3>5.2 Recevoir / lister / telecharger</h3>
+            <div class="stack">
+              <label for="noeudReceive">Noeud receveur</label>
+              <select id="noeudReceive"></select>
+              <div class="rangee">
+                <button id="btnListerFichiers">Lister fichiers connus</button>
+                <button id="btnAutoFileId" class="secondaire">Prendre le 1er file_id</button>
+              </div>
+              <label for="fileIdDownload">file_id</label>
+              <input id="fileIdDownload" placeholder="file_id" />
+              <label for="providerPortDownload">Port provider commun (si peers decouverts)</label>
+              <input id="providerPortDownload" type="number" min="1024" max="65535" value="9931" />
+              <label for="peersDownload">Peers explicites (1 ligne = node_id@host:port, optionnel)</label>
+              <textarea id="peersDownload" rows="4" placeholder="nodeid1@127.0.0.1:9931\nnodeid2@127.0.0.1:9932"></textarea>
+              <div class="rangee">
+                <input id="parallelDownload" type="number" min="1" max="16" value="3" />
+                <input id="timeoutDownload" type="number" min="100" value="1500" />
+              </div>
+              <button id="btnDownload">Telecharger</button>
             </div>
+            <pre id="sortieReceive"></pre>
+            <pre id="sortieDownload"></pre>
           </div>
-          <pre id="downloadOut"></pre>
-        </section>
+        </div>
+      </section>
 
-        <section class="card panel" id="aiPanel">
-          <h2>Gemini Direct</h2>
-          <div class="stack">
-            <textarea id="askPrompt" rows="2" placeholder="question"></textarea>
-            <div class="row">
-              <label class="check"><input id="askNoAi" type="checkbox" /> no-ai</label>
-              <button id="askBtn">Ask</button>
-            </div>
-          </div>
-          <pre id="askOut"></pre>
-        </section>
+      <section class="carte" id="geminiPanel">
+        <h2>6) Gemini direct (optionnel)</h2>
+        <p class="aide">Autorise Internet uniquement pour Gemini. Le reste du protocole reste local.</p>
+        <div class="stack">
+          <label for="noeudAsk">Noeud</label>
+          <select id="noeudAsk"></select>
+          <label for="promptAsk">Question</label>
+          <textarea id="promptAsk" rows="3" placeholder="resume l'etat du noeud"></textarea>
+          <label for="ctxAskN">Contexte auto: derniers N messages</label>
+          <input id="ctxAskN" type="number" min="1" max="200" value="12" />
+          <label for="ctxAsk">Contexte manuel (optionnel)</label>
+          <textarea id="ctxAsk" rows="3"></textarea>
+          <label class="check"><input id="flagNoAiAsk" type="checkbox" /> Forcer mode sans IA (--no-ai)</label>
+        </div>
+        <button id="btnAsk">Interroger Gemini</button>
+        <pre id="sortieAsk"></pre>
+      </section>
+
+      <section class="carte" id="journalPanel">
+        <h2>Journal des actions UI</h2>
+        <pre id="journalUi"></pre>
       </section>
     </main>
 
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast cache"></div>
     <script type="module" src="/app.js"></script>
   </body>
 </html>
