@@ -356,7 +356,7 @@ function runTrust() {
   const pos = positionalArgs();
   const store = new TrustStore(trustFile);
 
-  const approveNodeId = arg("--approve", pos[0] ?? "");
+  const approveNodeId = arg("--approve", "");
   if (approveNodeId) {
     const byNodeName = arg("--by", nodeName);
     const byIdentity = loadIdentity(byNodeName, keysDir);
@@ -378,7 +378,7 @@ function runTrust() {
     return;
   }
 
-  const filterNodeId = arg("--node-id", "");
+  const filterNodeId = arg("--node-id", pos[0] ?? "");
   const entries = store.list();
   const filtered = filterNodeId ? entries.filter((e) => e.node_id === filterNodeId) : entries;
 

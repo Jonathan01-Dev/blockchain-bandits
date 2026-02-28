@@ -241,11 +241,10 @@ Contexte chat:
 
 ## Equipe et contributions
 
-A completer avant soumission:
-- Membre 1: reseau P2P
-- Membre 2: crypto + messaging
-- Membre 3: transfert + chunking
-- Membre 4: integration CLI + docs + demo
+- Tawiya247: integration Sprint 4/Buffer, CLI avancée, docs finales.
+- JeanAK-TN: structure projet, coordination technique, packaging global.
+- anumuliberta: couche transfert (chunking/download manager/protocoles S3).
+- souleymaneandre59-ctrl: couche reseau P2P (discovery + peer table + TCP TLV).
 
 ## Securite / hygiene repo
 
