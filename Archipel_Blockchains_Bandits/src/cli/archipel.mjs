@@ -3,6 +3,10 @@ import { ArchipelNode } from "../network/archipel-node.mjs";
 import { SecureNode } from "../messaging/secure-node.mjs";
 
 function arg(name, fallback) {
+  const eqPrefix = `${name}=`;
+  const eqArg = process.argv.find((a) => a.startsWith(eqPrefix));
+  if (eqArg) return eqArg.slice(eqPrefix.length);
+
   const idx = process.argv.indexOf(name);
   if (idx >= 0 && idx + 1 < process.argv.length) return process.argv[idx + 1];
   return fallback;
