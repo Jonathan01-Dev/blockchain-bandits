@@ -119,6 +119,52 @@ function extrairePremierFileId(sortieReceive) {
   return "";
 }
 
+function formaterHeure(ts) {
+  if (!ts) return "--:--:--";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "--:--:--";
+  return d.toLocaleTimeString("fr-FR");
+}
+
+function afficherHistoriqueMessagerie(events) {
+  const zone = elt("sortieHistorique");
+  zone.innerHTML = "";
+
+  if (!Array.isArray(events) || events.length === 0) {
+    const vide = document.createElement("div");
+    vide.className = "chat-vide";
+    vide.textContent = "Aucun message pour ce filtre.";
+    zone.appendChild(vide);
+    return;
+  }
+
+  for (const e of events) {
+    const direction = String(e?.direction ?? "evt") === "out" ? "out" : "in";
+    const ligne = document.createElement("div");
+    ligne.className = `chat-msg ${direction}`;
+
+    const bulle = document.createElement("div");
+    bulle.className = "chat-bulle";
+
+    const meta = document.createElement("div");
+    meta.className = "chat-meta";
+    const peer = e?.peer ? String(e.peer).slice(0, 12) : "-";
+    const dirLabel = direction === "out" ? "Sortant" : "Entrant";
+    meta.textContent = `${dirLabel} - ${peer} - ${formaterHeure(e?.ts)}`;
+
+    const texteMsg = document.createElement("div");
+    texteMsg.className = "chat-texte";
+    texteMsg.textContent = String(e?.text ?? "");
+
+    bulle.appendChild(meta);
+    bulle.appendChild(texteMsg);
+    ligne.appendChild(bulle);
+    zone.appendChild(ligne);
+  }
+
+  zone.scrollTop = zone.scrollHeight;
+}
+
 function choisirCibleParDefaut(noeudSource) {
   return NOEUDS.find((n) => n.nom !== noeudSource) ?? NOEUDS[0];
 }
@@ -436,7 +482,7 @@ async function rafraichirHistorique() {
   if (direction) qs.set("direction", direction);
   if (peer) qs.set("peer", peer);
   const out = await api(`/api/chat?${qs.toString()}`);
-  texte("sortieHistorique", out.raw || "(aucun message)");
+  afficherHistoriqueMessagerie(out.events ?? []);
   journal(`Historique E2E rafraichi pour ${node}`);
 }
 
