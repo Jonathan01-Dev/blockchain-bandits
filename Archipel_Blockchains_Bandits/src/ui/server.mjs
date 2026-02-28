@@ -1,7 +1,9 @@
 import http from "node:http";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { execFile, spawn } from "node:child_process";
+import { TrustStore } from "../messaging/trust-store.mjs";
+import { loadIdentity } from "../crypto/keyring.mjs";
 
 const PORT = Number(process.env.ARCHIPEL_UI_PORT ?? "8787");
 const webRoot = resolve("web");
@@ -72,6 +74,93 @@ function parseTableOutput(text) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function readJsonFile(path, fallback) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return fallback;
+  }
+}
+
+function getPaths(nodeName) {
+  const dataDir = resolve(process.env.ARCHIPEL_DATA_DIR ?? ".archipel");
+  const keysDir = resolve(process.env.ARCHIPEL_KEYS_DIR ?? ".archipel/keys");
+  return {
+    dataDir,
+    keysDir,
+    trustFile: join(dataDir, `trust-${nodeName}.json`),
+    peersFile: join(dataDir, `peers-${nodeName}.json`),
+  };
+}
+
+function collectKnownNodeIds(nodeName) {
+  const { trustFile, peersFile, keysDir } = getPaths(nodeName);
+  const known = new Set();
+
+  const trustEntries = readJsonFile(trustFile, []);
+  if (Array.isArray(trustEntries)) {
+    for (const e of trustEntries) {
+      if (e?.node_id) known.add(String(e.node_id));
+    }
+  }
+
+  const peers = readJsonFile(peersFile, []);
+  if (Array.isArray(peers)) {
+    for (const p of peers) {
+      if (p?.node_id) known.add(String(p.node_id));
+    }
+  }
+
+  if (existsSync(keysDir)) {
+    const files = readdirSync(keysDir).filter((f) => f.endsWith("_ed25519.pub.pem"));
+    for (const file of files) {
+      const node = file.replace(/_ed25519\.pub\.pem$/, "");
+      try {
+        const id = loadIdentity(node, keysDir).nodeId;
+        if (id) known.add(id);
+      } catch {
+        // ignore invalid key files
+      }
+    }
+  }
+
+  return [...known];
+}
+
+function resolveNodeIdInput(nodeName, value) {
+  const input = stringField(value);
+  if (!input) return "";
+  if (/^[a-f0-9]{64}$/i.test(input)) return input;
+
+  const candidates = collectKnownNodeIds(nodeName).filter((id) => id.startsWith(input));
+  if (candidates.length === 1) return candidates[0];
+  return input;
+}
+
+function ensureTrustEntryKnown(nodeName, targetNodeId) {
+  const resolvedTarget = stringField(targetNodeId);
+  if (!resolvedTarget) return false;
+  const { trustFile, keysDir } = getPaths(nodeName);
+  const store = new TrustStore(trustFile);
+  if (store.getPublicKeyPem(resolvedTarget)) return true;
+
+  if (!existsSync(keysDir)) return false;
+  const files = readdirSync(keysDir).filter((f) => f.endsWith("_ed25519.pub.pem"));
+  for (const file of files) {
+    const candidateNode = file.replace(/_ed25519\.pub\.pem$/, "");
+    try {
+      const id = loadIdentity(candidateNode, keysDir);
+      if (id.nodeId === resolvedTarget) {
+        store.verifyOrTrust(id.nodeId, id.publicPem);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return false;
 }
 
 function stringField(value, fallback = "") {
@@ -392,13 +481,22 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/trust/approve") {
       const body = await parseBody(req);
       const node = stringField(body.nodeName, "machine-1");
-      const targetNodeId = stringField(body.targetNodeId);
+      const targetNodeId = resolveNodeIdInput(node, body.targetNodeId);
       if (!targetNodeId) throw new Error("missing required field: targetNodeId");
       const byNode = stringField(body.byNodeName, node);
       const note = stringField(body.note);
       const args = ["trust", "--node-name", node, "--approve", targetNodeId, "--by", byNode];
       if (note) args.push("--note", note);
-      const out = await runCli(args);
+      let out;
+      try {
+        out = await runCli(args);
+      } catch (err) {
+        if (String(err.message).includes("unknown node_id") && ensureTrustEntryKnown(node, targetNodeId)) {
+          out = await runCli(args);
+        } else {
+          throw err;
+        }
+      }
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
     }
@@ -406,12 +504,21 @@ async function handleApi(req, res, url) {
     if (req.method === "POST" && url.pathname === "/api/trust/revoke") {
       const body = await parseBody(req);
       const node = stringField(body.nodeName, "machine-1");
-      const targetNodeId = stringField(body.targetNodeId);
+      const targetNodeId = resolveNodeIdInput(node, body.targetNodeId);
       if (!targetNodeId) throw new Error("missing required field: targetNodeId");
       const byNode = stringField(body.byNodeName, node);
       const reason = stringField(body.reason, "revocation manuelle");
       const args = ["trust", "--node-name", node, "--revoke", targetNodeId, "--by", byNode, "--reason", reason];
-      const out = await runCli(args);
+      let out;
+      try {
+        out = await runCli(args);
+      } catch (err) {
+        if (String(err.message).includes("unknown node_id") && ensureTrustEntryKnown(node, targetNodeId)) {
+          out = await runCli(args);
+        } else {
+          throw err;
+        }
+      }
       sendJson(res, 200, { ok: true, raw: out.stdout });
       return;
     }
