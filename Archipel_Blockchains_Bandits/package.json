@@ -7,6 +7,8 @@
     "keys:generate": "node src/crypto/generate-keys.mjs",
     "start": "node src/cli/archipel.mjs start",
     "sprint1:check": "node demo/sprint1-check.mjs",
-    "sprint2:check": "node demo/sprint2-check.mjs"
+    "sprint2:check": "node demo/sprint2-check.mjs",
+    "sprint3:core:check": "node demo/sprint3-core-check.mjs",
+    "sprint3:protocol:check": "node demo/sprint3-protocol-check.mjs"
   }
 }
