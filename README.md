@@ -1,266 +1,161 @@
-# Archipel - Blockchains Bandits
+# Archipel - Protocole P2P local chiffre
 
-Protocole P2P local, decentralise, chiffre de bout en bout, sans serveur central.
+Archipel est un prototype P2P local sans serveur central. Chaque noeud decouvre les pairs sur LAN, etablit un tunnel chiffre de bout en bout, puis echange messages et fichiers chunkes avec verification cryptographique.
 
-## Etat des sprints
+## Architecture et choix techniques
+- Discovery LAN: UDP multicast `239.255.42.99:6000` (`HELLO` + `PEER_LIST`)
+- Transport de donnees: TCP pair-a-pair
+- Framing paquet: binaire (MAGIC/TYPE/NODE_ID/PAYLOAD_LEN/PAYLOAD/HMAC)
+- Session security: handshake Ed25519 + X25519, derive HKDF-SHA256, tunnel AES-256-GCM
+- Integrite paquet: HMAC-SHA256 sur chaque paquet
+- Trust model: TOFU + approbation/revocation locale + propagation best-effort de signatures
+- Fichiers: manifest signe, chunks signes, hash SHA-256 par chunk + hash global
+- Multi-source: `CHUNK_MAP_REQUEST` + ordonnancement rarest-first + fallback + resume
+- Replication passive: re-partage automatique des fichiers completes
 
-- Sprint 0: termine
-- Sprint 1: termine
-- Sprint 2: termine
-- Sprint 3: termine
-- Sprint 4: CLI demo integree + README final
+Schema d'architecture detaille: `docs/architecture.md`.
 
-## Architecture implementee
-
-- Discovery: UDP multicast (HELLO) sur `239.255.42.99:6000`
-- Echange metadata pairs: TCP en TLV (`PEER_LIST`, `PING`, `PONG`)
-- Canal message E2E: handshake Noise-like + AES-256-GCM
-- Transfert fichier: manifest signe + chunks + `CHUNK_REQ/CHUNK_DATA/ACK`
-- Stockage local: `.archipel/` (peer table, trust store, index, chunks, downloads)
-
-Schema logique:
-
+## Schema ASCII rapide
 ```text
-+----------------------+           +----------------------+
-| Node A               |           | Node B               |
-| UDP HELLO <--------> |  LAN      | UDP HELLO <--------> |
-| TCP PEER_LIST/PING   | <-------> | TCP PEER_LIST/PING   |
-| Secure MSG (E2E)     | <-------> | Secure MSG (E2E)     |
-| CHUNK provider/client| <-------> | CHUNK provider/client|
-+----------------------+           +----------------------+
+[HELLO/PEER_LIST UDP] --> [PeerTable] --> [TCP Secure Handshake]
+                                      --> [SECURE tunnel AES-GCM + HMAC]
+                                      --> [MSG | MANIFEST | CHUNK_REQ/CHUNK_DATA]
+                                      --> [FileTransfer + index.db + resume + rarest-first]
 ```
 
-Voir aussi:
-- `docs/architecture.md`
-- `docs/protocol-spec.md`
+## Structure
+```text
+archipel/
+├── src/
+│   ├── ai/
+│   ├── cli/
+│   ├── core/
+│   ├── crypto/
+│   ├── network/
+│   └── transfer/
+├── docs/
+│   ├── protocol-spec.md
+│   └── architecture.md
+├── tests/
+├── scripts/
+└── demo/
+```
 
-## Primitives cryptographiques
+## Prerequis
+- Node.js 20+
 
-- Ed25519: identite de noeud + signatures (authentification)
-- X25519: echange de secret ephemere (session par connexion)
-- HKDF-SHA256: derivation de cle de session
-- AES-256-GCM: chiffrement + auth tag des messages
-- HMAC-SHA256: integrite des paquets discovery Archipel v1
-- SHA-256: hash fichiers/chunks
-
-Justification:
-- Primitives standards, robustes et disponibles dans les libs natives Node.
-- Pas d'algorithme maison.
-
-## Installation (step-by-step)
-
-1. Pre-requis:
-- Node.js >= 20
-
-2. Installation:
-
+## Installation (machine fraiche)
 ```bash
+cd archipel
 npm install
 cp .env.example .env
+npm run clean:state
 ```
 
-3. Config minimale `.env`:
-
-```env
-ARCHIPEL_DISCOVERY_HMAC_KEY=change-me-in-real-lan
-```
-
-Sur plusieurs machines, la valeur `ARCHIPEL_DISCOVERY_HMAC_KEY` doit etre identique.
-
-4. Generer les cles des noeuds utilises:
-
+## Lancer un noeud
 ```bash
-node src/crypto/generate-keys.mjs --node-name machine-1 --force
-node src/crypto/generate-keys.mjs --node-name machine-2 --force
-node src/crypto/generate-keys.mjs --node-name machine-3 --force
+node src/cli/index.js start --port 7777
 ```
 
-## Commandes CLI (Sprint 4)
-
-- `start`: demarrer le noeud reseau P2P
-- `peers`: lister les pairs connus
-- `status`: etat local (node_id, peers, trust, manifests)
-- `trust`: lister le trust store local
-- `secure-listen`: ecouter les messages E2E
-- `secure-send` / `msg <node_id> 'Hello!'`: envoyer un message E2E
-- `send <node_id> <filepath>`: preparer le fichier + notifier le pair cible
-- `receive`: lister fichiers connus localement
-- `receive --listen`: exposer les chunks locaux aux autres noeuds
-- `download <file_id>`: telecharger un fichier depuis les peers decouverts
-- `ask`: interroger Gemini (optionnel, desactivable)
-
-Actions trust avancees:
-- `trust --approve <node_id> --by <node_name>`: signer localement une approbation (propagation confiance)
-- `trust --revoke <node_id> --reason \"...\"`: enregistrer une revocation signee locale
-
-Aide rapide:
-
+## Lancer le dashboard web (HTML vanilla)
 ```bash
-node src/cli/archipel.mjs
+npm run start:web
 ```
+Puis ouvrir `http://127.0.0.1:8080`.
 
-Mode d'emploi CLI complet (FR):
-- `docs/MODE_D_EMPLOI_CLI.md`
-
-## UI Web Vanilla (bonus Sprint 4)
-
-Demarrage:
-
+Option combinee:
 ```bash
-npm run ui:start
+node src/cli/index.js start --port 7777 --web --web-port 8080
 ```
 
-Puis ouvrir:
-
-```text
-http://127.0.0.1:8787
-```
-
-Fonctions disponibles:
-- lecture status/peers/trust/files
-- envoi message chiffre (avec trigger IA `/ask` ou `@archipel-ai`)
-- preparation + notification fichier
-- download par file_id
-- requete Gemini directe
-
-Mode d'emploi UI complet (FR):
-- `docs/MODE_D_EMPLOI_UI.md`
-
-## Guide de demo jury (3 cas d'usage)
-
-### Cas 1 - Decouverte P2P (Sprint 1)
-
-Terminal 1:
-
+Mode web sans prompt CLI:
 ```bash
-node src/cli/archipel.mjs start --node-name machine-1 --port 7777
+node src/cli/index.js start --port 7777 --web --web-port 8080 --web-only
 ```
 
-Terminal 2:
-
-```bash
-node src/cli/archipel.mjs start --node-name machine-2 --port 7778
-```
-
-Terminal 3:
-
-```bash
-node src/cli/archipel.mjs start --node-name machine-3 --port 7779
-```
-
-Verification:
-
-```bash
-node src/cli/archipel.mjs peers --node-name machine-1
-```
-
-### Cas 2 - Message chiffre E2E (Sprint 2)
-
-Terminal A:
-
-```bash
-node src/cli/archipel.mjs secure-listen --node-name machine-2 --port 8802
-```
-
-Terminal B:
-
-```bash
-node src/cli/archipel.mjs msg <node_id_machine_2> "Bonjour jury"
-```
-
-Attendu: handshake OK et message affiche cote `machine-2`.
-
-Declenchement assistant en chat:
-
-```bash
-node src/cli/archipel.mjs msg <node_id_machine_2> "/ask resumer les derniers echanges"
-```
-
-ou
-
-```bash
-node src/cli/archipel.mjs msg <node_id_machine_2> "@archipel-ai donne un recapitulatif"
-```
-
-Le CLI enverra la requete a Gemini avec contexte des derniers messages (N configurable), puis renverra la reponse dans le chat.
-
-### Cas 3 - Fichier 50 Mo multi-noeuds (Sprint 3)
-
-Verification automatique complete:
-
-```bash
-npm run sprint3:full:check
-```
-
-Attendu:
-- transfert 50 Mo reussi
-- deconnexion d'un seed geree (fallback)
-- hash final identique
-
-## Validation automatique
-
-```bash
-npm run sprint1:check
-npm run sprint2:check
-npm run sprint3:core:check
-npm run sprint3:protocol:check
-npm run sprint3:download:check
-npm run sprint3:full:check
-npm run sprint3:check
-npm run sprint3:multi:check
-npm run sprint3:corrupt:check
-npm run sprint4:cli:check
-```
-
-## Gemini (optionnel)
-
-Activation:
-
-```env
-ARCHIPEL_AI_ENABLED=true
-ARCHIPEL_GEMINI_API_KEY=<your_key>
-ARCHIPEL_GEMINI_MODEL=gemini-1.5-flash
-```
+Options utiles:
+- `--no-ai`: desactive Gemini (mode offline strict)
+- `--replication-factor 2`: facteur cible de replication locale
 
 Exemple:
-
 ```bash
-node src/cli/archipel.mjs ask --prompt "resume l'etat du noeud"
+node src/cli/index.js start --port 7777 --no-ai --replication-factor 2
 ```
 
-Mode offline strict:
+## Commandes CLI
+- `peers`
+- `msg <peer_id_prefix> <texte>`
+- `ask <question>` (Gemini local, si actif)
+- `share <filepath>`
+- `send <peer_id_prefix> <fichier>`
+- `pull <peer_id_prefix> <file_id> [output]`
+- `sources <file_id>`
+- `pull-multi <file_id> [output] [parallelism]`
+- `resume <file_id> [output] [parallelism]`
+- `receive`
+- `download <file_id> [output]`
+- `status`
+- `trust`
+- `trust <peer_id_prefix> approve`
+- `trust <peer_id_prefix> revoke [reason]`
 
+## Guide de demo (3 cas d'usage)
+1. Decouverte P2P (3 noeuds)
 ```bash
-node src/cli/archipel.mjs ask --prompt "test" --no-ai
+node src/cli/index.js start --port 7777
+node src/cli/index.js start --port 7778
+node src/cli/index.js start --port 7779
+```
+Puis `peers` sur chaque terminal.
+
+2. Message chiffre
+```bash
+msg <peer_prefix> Bonjour
+```
+(Option AI contextuelle)
+```bash
+msg <peer_prefix> @archipel-ai Resumer l'etat du reseau
 ```
 
-Contexte chat:
-- contexte auto des `ARCHIPEL_AI_CONTEXT_MESSAGES` derniers messages (defaut 12)
-- surcharge possible via `--context` ou `--context-messages`
+3. Transfert fichier multi-source 50 Mo
+- Sur A et B: `share demo/demo_50mb.bin`
+- Sur C: `sources <file_id>` puis `pull-multi <file_id>`
+- En cours d'interruption: relancer et `resume <file_id>`
+- Verification via `status` (hash final, progression, retries/timeouts)
 
-## Limitations connues
+## Primitives cryptographiques et justification
+- Ed25519: identite et signatures robustes et rapides
+- X25519: echange de secret ephemeral par connexion (forward secrecy)
+- HKDF-SHA256: derivation de cle de session stable
+- AES-256-GCM: chiffrement authentifie des payloads
+- HMAC-SHA256: integrite de chaque paquet transporte
+- SHA-256: empreinte chunks + hash global fichier
 
-- Le chargement automatique de `.env` n'est pas integre (variables a exporter selon shell).
-- Le `download <file_id>` suppose que les pairs decouverts exposent leurs chunks sur un port fournisseur commun (defaut `9931`, configurable via `--provider-port`).
-- Le Web of Trust est local (endorsement/revocation signes), sans propagation automatique reseau.
-- Les tests unitaires dedies `tests/` ne sont pas encore fournis (checks d'integration via `demo/`).
+## Integration Gemini (optionnelle)
+- Variable: `GEMINI_API_KEY`
+- Declenchement: `ask <question>` ou messages `@archipel-ai ...` / `/ask ...`
+- Desactivation: `--no-ai`
+- En cas d'indisponibilite: erreur gracieuse, pas de crash
 
-## Pistes d'amelioration
+## Tests
+```bash
+npm run test:unit
+npm run test:smoke
+npm run test:smoke:multi
+npm run test:smoke:resume
+npm run test:smoke:retry
+```
 
-- Integrer un chargement `.env` natif dans la CLI/UI pour eviter l'export manuel.
-- Ajouter une propagation reseau des endorsements/revocations du Web of Trust.
-- Ajouter des tests unitaires granulaires en plus des checks d'integration.
-- Ameliorer la gestion des erreurs Gemini (retry/backoff sur HTTP 429, message utilisateur plus guide).
+## Limitations connues et ameliorations
+- Propagation Web of Trust simplifiee (pas de consensus/reseau de confiance complet)
+- Anti-rejeu de session base sur timestamp (pas encore sequence globale durable)
+- Ordonnancement rarest-first base sur maps courantes (pas de predictive scheduling)
+- Index local `index.db` au format JSON (pas SQLite)
+- UI web non implementee (CLI priorisee)
 
-## Equipe et contributions
+## Membres et contributions
+- Daniel: implementation du prototype (reseau P2P, crypto, transfert multi-source, CLI, tests, documentation).
 
-- Tawiya247: integration Sprint 4/Buffer, CLI avancée, docs finales.
-- JeanAK-TN: structure projet, coordination technique, packaging global.
-- anumuliberta: couche transfert (chunking/download manager/protocoles S3).
-- souleymaneandre59-ctrl: couche reseau P2P (discovery + peer table + TCP TLV).
-
-## Securite / hygiene repo
-
-- `.env` et `.archipel/` ignores par Git
-- cles PEM locales ignorees par Git
-- ne jamais versionner de secrets reels
+## Utilitaires
+- `npm run clean:state`: nettoie peers/trust/downloads/index
+- `./demo/run_demo_checks.sh`: enchaine les checks de demo
