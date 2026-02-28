@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import net from "node:net";
 import { createHash, createPublicKey, sign, verify } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { decodeFrames, encodeFrame } from "../network/tcp-frame.mjs";
 import { ACK_STATUS, TRANSFER_FRAME_TYPE } from "./protocol.mjs";
 
@@ -42,10 +42,11 @@ function dataHash(dataBuffer) {
 }
 
 export class ChunkTransferNode extends EventEmitter {
-  constructor({ nodeId, privateKey, indexStore, host = "127.0.0.1", port }) {
+  constructor({ nodeId, privateKey, publicPem, indexStore, host = "127.0.0.1", port }) {
     super();
     this.nodeId = nodeId;
     this.privateKey = privateKey;
+    this.publicPem = publicPem;
     this.indexStore = indexStore;
     this.host = host;
     this.port = Number(port);
@@ -81,7 +82,7 @@ export class ChunkTransferNode extends EventEmitter {
       const manifest = this.indexStore.getManifest(req.file_id);
       const chunk = manifest?.chunks?.find((c) => c.index === req.chunk_idx);
 
-      if (!manifest || !chunk) {
+      if (!manifest || !chunk || !chunk.path || !existsSync(chunk.path)) {
         socket.write(
           encodeFrame(TRANSFER_FRAME_TYPE.ACK, {
             chunk_idx: req.chunk_idx,
@@ -102,6 +103,7 @@ export class ChunkTransferNode extends EventEmitter {
           chunk_hash: chunk.hash,
           signature,
           sender_id: this.nodeId,
+          signer_pub_key: this.publicPem,
         })
       );
 
@@ -150,11 +152,11 @@ export class ChunkTransferNode extends EventEmitter {
 
     const chunkHashOk = createHash("sha256").update(data).digest("hex") === payload.chunk_hash;
     const expectedHashOk = expected ? expected.hash === payload.chunk_hash : true;
-    const sigOk = manifest
+    const sigOk = payload.signer_pub_key
       ? verify(
           null,
           dataHash(data),
-          createPublicKey(manifest.sender_pub_key),
+          createPublicKey(payload.signer_pub_key),
           Buffer.from(payload.signature, "base64")
         )
       : false;
