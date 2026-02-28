@@ -1,0 +1,8 @@
+node_modules
+.env
+*.key
+*.pem
+*.archipel
+.archipel/data
+.archipel/keys
+.archipel/downloads
