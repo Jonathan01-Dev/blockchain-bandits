@@ -1,120 +1,233 @@
 # Archipel - Blockchains Bandits
 
-Protocole P2P local, decentralise, chiffre, sans serveur central.
+Protocole P2P local, decentralise, chiffre de bout en bout, sans serveur central.
 
-## Sprint courant
+## Etat des sprints
 
-- Sprint 3 termine
+- Sprint 0: termine
+- Sprint 1: termine
+- Sprint 2: termine
+- Sprint 3: termine
+- Sprint 4: CLI demo integree + README final
 
-## Stack choisie (Sprint 0)
+## Architecture implementee
 
-- Runtime: Node.js (>= 20)
-- Discovery reseau: UDP multicast
-- Transfert reseau: TCP sockets
-- Crypto cible:
-- Ed25519 (identite/signature)
-- X25519 + HKDF-SHA256 (cle de session)
-- AES-256-GCM (chiffrement)
-- HMAC-SHA256 (integrite)
+- Discovery: UDP multicast (HELLO) sur `239.255.42.99:6000`
+- Echange metadata pairs: TCP en TLV (`PEER_LIST`, `PING`, `PONG`)
+- Canal message E2E: handshake Noise-like + AES-256-GCM
+- Transfert fichier: manifest signe + chunks + `CHUNK_REQ/CHUNK_DATA/ACK`
+- Stockage local: `.archipel/` (peer table, trust store, index, chunks, downloads)
 
-## Schema architecture
+Schema logique:
 
-Voir [docs/architecture.md](docs/architecture.md).
+```text
++----------------------+           +----------------------+
+| Node A               |           | Node B               |
+| UDP HELLO <--------> |  LAN      | UDP HELLO <--------> |
+| TCP PEER_LIST/PING   | <-------> | TCP PEER_LIST/PING   |
+| Secure MSG (E2E)     | <-------> | Secure MSG (E2E)     |
+| CHUNK provider/client| <-------> | CHUNK provider/client|
++----------------------+           +----------------------+
+```
 
-## Spec format paquet
+Voir aussi:
+- `docs/architecture.md`
+- `docs/protocol-spec.md`
 
-Voir [docs/protocol-spec.md](docs/protocol-spec.md).
+## Primitives cryptographiques
 
-## Configuration
+- Ed25519: identite de noeud + signatures (authentification)
+- X25519: echange de secret ephemere (session par connexion)
+- HKDF-SHA256: derivation de cle de session
+- AES-256-GCM: chiffrement + auth tag des messages
+- HMAC-SHA256: integrite des paquets discovery Archipel v1
+- SHA-256: hash fichiers/chunks
 
-1. Copier l'environnement:
+Justification:
+- Primitives standards, robustes et disponibles dans les libs natives Node.
+- Pas d'algorithme maison.
+
+## Installation (step-by-step)
+
+1. Pre-requis:
+- Node.js >= 20
+
+2. Installation:
 
 ```bash
+npm install
 cp .env.example .env
 ```
 
-2. Generer les cles locales Ed25519:
+3. Config minimale `.env`:
 
-```bash
-node src/crypto/generate-keys.mjs --node-name node-1
+```env
+ARCHIPEL_DISCOVERY_HMAC_KEY=change-me-in-real-lan
 ```
 
-3. (Optionnel) Regenerer en ecrasant:
+Sur plusieurs machines, la valeur `ARCHIPEL_DISCOVERY_HMAC_KEY` doit etre identique.
+
+4. Generer les cles des noeuds utilises:
 
 ```bash
-node src/crypto/generate-keys.mjs --node-name node-1 --force
+node src/crypto/generate-keys.mjs --node-name machine-1 --force
+node src/crypto/generate-keys.mjs --node-name machine-2 --force
+node src/crypto/generate-keys.mjs --node-name machine-3 --force
 ```
 
-## Livrables Sprint 0
+## Commandes CLI (Sprint 4)
 
-- README complete avec stack, architecture et spec paquet
-- Architecture documentee (`docs/architecture.md`)
-- Specification paquet minimale (`docs/protocol-spec.md`)
-- PKI locale: script de generation de cles (`src/crypto/generate-keys.mjs`)
+- `start`: demarrer le noeud reseau P2P
+- `peers`: lister les pairs connus
+- `status`: etat local (node_id, peers, trust, manifests)
+- `trust`: lister le trust store local
+- `secure-listen`: ecouter les messages E2E
+- `secure-send` / `msg <node_id> 'Hello!'`: envoyer un message E2E
+- `send <node_id> <filepath>`: preparer le fichier + notifier le pair cible
+- `receive`: lister fichiers connus localement
+- `receive --listen`: exposer les chunks locaux aux autres noeuds
+- `download <file_id>`: telecharger un fichier depuis les peers decouverts
+- `ask`: interroger Gemini (optionnel, desactivable)
 
-## Livrables Sprint 1
+Actions trust avancees:
+- `trust --approve <node_id> --by <node_name>`: signer localement une approbation (propagation confiance)
+- `trust --revoke <node_id> --reason \"...\"`: enregistrer une revocation signee locale
 
-- Couche discovery UDP multicast (`239.255.42.99:6000`) implementee
-- Peer table en memoire + persistance JSON (`.archipel/peers-*.json`)
-- Timeout pair mort (90s parametre)
-- Serveur TCP de reception + echange `PEER_LIST` en TLV (Type-Length-Value)
-- Keep-alive applicatif `PING/PONG` toutes les 15s
-- Affichage peer table en console (log periodique)
-- Verification 3 noeuds:
+Aide rapide:
 
 ```bash
-npm run sprint1:check
+node src/cli/archipel.mjs
 ```
 
-Le script lance 3 noeuds locaux (`7777`, `7778`, `7779`) et valide que chaque noeud decouvre les 2 autres.
+## Guide de demo jury (3 cas d'usage)
 
-## Commandes secure (Sprint 2)
+### Cas 1 - Decouverte P2P (Sprint 1)
+
+Terminal 1:
+
+```bash
+node src/cli/archipel.mjs start --node-name machine-1 --port 7777
+```
+
+Terminal 2:
+
+```bash
+node src/cli/archipel.mjs start --node-name machine-2 --port 7778
+```
+
+Terminal 3:
+
+```bash
+node src/cli/archipel.mjs start --node-name machine-3 --port 7779
+```
+
+Verification:
+
+```bash
+node src/cli/archipel.mjs peers --node-name machine-1
+```
+
+### Cas 2 - Message chiffre E2E (Sprint 2)
+
+Terminal A:
 
 ```bash
 node src/cli/archipel.mjs secure-listen --node-name machine-2 --port 8802
-node src/cli/archipel.mjs secure-send --node-name machine-1 --to-host 127.0.0.1 --to-port 8802 --message Bonjour
 ```
 
-## Livrables Sprint 2
-
-- Handshake authentifie sans CA (mode Noise-like): `HELLO -> HELLO_REPLY -> AUTH -> AUTH_OK`
-- Identite de noeud: Ed25519 (signature/verification)
-- Echange de cle de session: X25519 + HKDF-SHA256
-- Chiffrement de message: AES-256-GCM
-- Integrite/signature message: signature Ed25519 sur hash du message chiffre
-- Web of Trust (TOFU): stockage et verification de la cle publique par `node_id`
-- Demo machine-1 -> machine-2:
+Terminal B:
 
 ```bash
+node src/cli/archipel.mjs msg <node_id_machine_2> "Bonjour jury"
+```
+
+Attendu: handshake OK et message affiche cote `machine-2`.
+
+Declenchement assistant en chat:
+
+```bash
+node src/cli/archipel.mjs msg <node_id_machine_2> "/ask resumer les derniers echanges"
+```
+
+ou
+
+```bash
+node src/cli/archipel.mjs msg <node_id_machine_2> "@archipel-ai donne un recapitulatif"
+```
+
+Le CLI enverra la requete a Gemini avec contexte des derniers messages (N configurable), puis renverra la reponse dans le chat.
+
+### Cas 3 - Fichier 50 Mo multi-noeuds (Sprint 3)
+
+Verification automatique complete:
+
+```bash
+npm run sprint3:full:check
+```
+
+Attendu:
+- transfert 50 Mo reussi
+- deconnexion d'un seed geree (fallback)
+- hash final identique
+
+## Validation automatique
+
+```bash
+npm run sprint1:check
 npm run sprint2:check
-```
-
-Le test valide:
-- machine-2 dechiffre correctement le message de machine-1
-- Le plaintext n'apparait pas dans les octets transportes
-
-## Livrables Sprint 3
-
-- Manifest fichier signe (hash fichier + hash chunks + metadata)
-- Protocole transfer:
-- `CHUNK_REQ`
-- `CHUNK_DATA`
-- `ACK` (`OK`, `HASH_MISMATCH`, `NOT_FOUND`)
-- Download manager:
-- telechargement parallelise (3 workers)
-- strategie rarest-first
-- fallback automatique si peer indisponible
-- verification hash chunk puis reassemblage + verification SHA-256 final
-- index local de manifests/chunks via `index.json`
-
-Commandes de test Sprint 3:
-
-```bash
-npm run sprint3:check
 npm run sprint3:core:check
 npm run sprint3:protocol:check
 npm run sprint3:download:check
 npm run sprint3:full:check
+npm run sprint3:check
+npm run sprint3:multi:check
+npm run sprint3:corrupt:check
+npm run sprint4:cli:check
 ```
 
-La commande `sprint3:full:check` simule un transfert 50 Mo entre 3 seeds et 1 receveur avec deconnexion d'un noeud en cours.
+## Gemini (optionnel)
+
+Activation:
+
+```env
+ARCHIPEL_AI_ENABLED=true
+ARCHIPEL_GEMINI_API_KEY=<your_key>
+ARCHIPEL_GEMINI_MODEL=gemini-1.5-flash
+```
+
+Exemple:
+
+```bash
+node src/cli/archipel.mjs ask --prompt "resume l'etat du noeud"
+```
+
+Mode offline strict:
+
+```bash
+node src/cli/archipel.mjs ask --prompt "test" --no-ai
+```
+
+Contexte chat:
+- contexte auto des `ARCHIPEL_AI_CONTEXT_MESSAGES` derniers messages (defaut 12)
+- surcharge possible via `--context` ou `--context-messages`
+
+## Limitations connues
+
+- Le chargement automatique de `.env` n'est pas integre (variables a exporter selon shell).
+- Le `download <file_id>` suppose que les pairs decouverts exposent leurs chunks sur un port fournisseur commun (defaut `9931`, configurable via `--provider-port`).
+- Le Web of Trust est local (endorsement/revocation signes), sans propagation automatique reseau.
+- Les tests unitaires dedies `tests/` ne sont pas encore fournis (checks d'integration via `demo/`).
+
+## Equipe et contributions
+
+A completer avant soumission:
+- Membre 1: reseau P2P
+- Membre 2: crypto + messaging
+- Membre 3: transfert + chunking
+- Membre 4: integration CLI + docs + demo
+
+## Securite / hygiene repo
+
+- `.env` et `.archipel/` ignores par Git
+- cles PEM locales ignorees par Git
+- ne jamais versionner de secrets reels
