@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Archipel UI</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-left">
+        <h1>Archipel Control Room</h1>
+        <p>Console web vanilla pour pilotage P2P, chat E2E et transferts</p>
+      </div>
+      <div class="hero-right">
+        <div class="status-pill" id="apiHealth">API inconnue</div>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar card">
+        <h2>Pilotage</h2>
+        <div class="stack">
+          <label for="nodeName">Noeud actif</label>
+          <input id="nodeName" value="machine-1" />
+          <button id="quickRefresh">Refresh global</button>
+        </div>
+        <hr />
+        <div class="stack">
+          <button class="ghost" data-target="statusPanel">Etat</button>
+          <button class="ghost" data-target="networkPanel">Reseau</button>
+          <button class="ghost" data-target="chatPanel">Messagerie</button>
+          <button class="ghost" data-target="filesPanel">Fichiers</button>
+          <button class="ghost" data-target="aiPanel">Gemini</button>
+        </div>
+      </aside>
+
+      <section class="content-grid">
+        <section class="card panel" id="statusPanel">
+          <div class="card-head">
+            <h2>Etat Local</h2>
+            <button id="refreshStatus">Refresh</button>
+          </div>
+          <pre id="statusOut"></pre>
+        </section>
+
+        <section class="card panel" id="networkPanel">
+          <div class="card-head">
+            <h2>Peers</h2>
+            <button id="refreshPeers">Refresh peers</button>
+          </div>
+          <pre id="peersOut"></pre>
+          <div class="card-head">
+            <h2>Trust Store</h2>
+            <button id="refreshTrust">Refresh trust</button>
+          </div>
+          <pre id="trustOut"></pre>
+        </section>
+
+        <section class="card panel" id="chatPanel">
+          <h2>Messagerie Chiffree</h2>
+          <div class="stack">
+            <input id="msgNodeId" placeholder="node_id cible" />
+            <textarea id="msgText" rows="3" placeholder='message (support /ask ... ou @archipel-ai ...)'></textarea>
+            <div class="row">
+              <label class="check"><input id="msgNoAi" type="checkbox" /> no-ai</label>
+              <button id="sendMsg">Envoyer</button>
+            </div>
+          </div>
+          <pre id="msgOut"></pre>
+        </section>
+
+        <section class="card panel" id="filesPanel">
+          <h2>Fichiers</h2>
+          <div class="stack">
+            <input id="sendNodeId" placeholder="node_id cible (optionnel)" />
+            <input id="sendPath" placeholder="/chemin/vers/fichier.bin" />
+            <button id="sendFile">Prepare + notify</button>
+          </div>
+          <pre id="sendOut"></pre>
+          <div class="stack">
+            <input id="fileId" placeholder="file_id" />
+            <div class="row">
+              <button id="downloadFile">Download</button>
+              <button id="listFiles">List local files</button>
+            </div>
+          </div>
+          <pre id="downloadOut"></pre>
+        </section>
+
+        <section class="card panel" id="aiPanel">
+          <h2>Gemini Direct</h2>
+          <div class="stack">
+            <textarea id="askPrompt" rows="2" placeholder="question"></textarea>
+            <div class="row">
+              <label class="check"><input id="askNoAi" type="checkbox" /> no-ai</label>
+              <button id="askBtn">Ask</button>
+            </div>
+          </div>
+          <pre id="askOut"></pre>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

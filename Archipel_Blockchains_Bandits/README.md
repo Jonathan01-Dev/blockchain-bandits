@@ -99,6 +99,27 @@ Aide rapide:
 node src/cli/archipel.mjs
 ```
 
+## UI Web Vanilla (bonus Sprint 4)
+
+Demarrage:
+
+```bash
+npm run ui:start
+```
+
+Puis ouvrir:
+
+```text
+http://127.0.0.1:8787
+```
+
+Fonctions disponibles:
+- lecture status/peers/trust/files
+- envoi message chiffre (avec trigger IA `/ask` ou `@archipel-ai`)
+- preparation + notification fichier
+- download par file_id
+- requete Gemini directe
+
 ## Guide de demo jury (3 cas d'usage)
 
 ### Cas 1 - Decouverte P2P (Sprint 1)

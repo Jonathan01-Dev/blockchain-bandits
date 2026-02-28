@@ -6,6 +6,7 @@
   "scripts": {
     "keys:generate": "node src/crypto/generate-keys.mjs",
     "start": "node src/cli/archipel.mjs start",
+    "ui:start": "node src/ui/server.mjs",
     "sprint1:check": "node demo/sprint1-check.mjs",
     "sprint2:check": "node demo/sprint2-check.mjs",
     "sprint3:check": "node demo/sprint3-full-check.mjs",
