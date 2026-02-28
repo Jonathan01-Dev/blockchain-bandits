@@ -40,12 +40,14 @@ leechIndex.upsertManifest(seedManifest);
 const seedNode = new ChunkTransferNode({
   nodeId: seed.nodeId,
   privateKey: seed.privateKey,
+  publicPem: seed.publicPem,
   indexStore: seedIndex,
   port: 9911,
 });
 const leechNode = new ChunkTransferNode({
   nodeId: leech.nodeId,
   privateKey: leech.privateKey,
+  publicPem: leech.publicPem,
   indexStore: leechIndex,
   port: 9912,
 });

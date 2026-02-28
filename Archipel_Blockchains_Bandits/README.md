@@ -4,7 +4,7 @@ Protocole P2P local, decentralise, chiffre, sans serveur central.
 
 ## Sprint courant
 
-- Sprint 2 termine
+- Sprint 3 termine
 
 ## Stack choisie (Sprint 0)
 
@@ -85,3 +85,28 @@ npm run sprint2:check
 Le test valide:
 - Bob dechiffre correctement le message d'Alice
 - Le plaintext n'apparait pas dans les octets transportes
+
+## Livrables Sprint 3
+
+- Manifest fichier signe (hash fichier + hash chunks + metadata)
+- Protocole transfer:
+- `CHUNK_REQ`
+- `CHUNK_DATA`
+- `ACK` (`OK`, `HASH_MISMATCH`, `NOT_FOUND`)
+- Download manager:
+- telechargement parallelise (3 workers)
+- strategie rarest-first
+- fallback automatique si peer indisponible
+- verification hash chunk puis reassemblage + verification SHA-256 final
+- index local de manifests/chunks via `index.json`
+
+Commandes de test Sprint 3:
+
+```bash
+npm run sprint3:core:check
+npm run sprint3:protocol:check
+npm run sprint3:download:check
+npm run sprint3:full:check
+```
+
+La commande `sprint3:full:check` simule un transfert 50 Mo entre 3 seeds et 1 receveur avec deconnexion d'un noeud en cours.

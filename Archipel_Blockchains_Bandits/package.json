@@ -9,6 +9,8 @@
     "sprint1:check": "node demo/sprint1-check.mjs",
     "sprint2:check": "node demo/sprint2-check.mjs",
     "sprint3:core:check": "node demo/sprint3-core-check.mjs",
-    "sprint3:protocol:check": "node demo/sprint3-protocol-check.mjs"
+    "sprint3:protocol:check": "node demo/sprint3-protocol-check.mjs",
+    "sprint3:download:check": "node demo/sprint3-download-check.mjs",
+    "sprint3:full:check": "node demo/sprint3-full-check.mjs"
   }
 }
