@@ -245,6 +245,13 @@ Contexte chat:
 - Le Web of Trust est local (endorsement/revocation signes), sans propagation automatique reseau.
 - Les tests unitaires dedies `tests/` ne sont pas encore fournis (checks d'integration via `demo/`).
 
+## Pistes d'amelioration
+
+- Integrer un chargement `.env` natif dans la CLI/UI pour eviter l'export manuel.
+- Ajouter une propagation reseau des endorsements/revocations du Web of Trust.
+- Ajouter des tests unitaires granulaires en plus des checks d'integration.
+- Ameliorer la gestion des erreurs Gemini (retry/backoff sur HTTP 429, message utilisateur plus guide).
+
 ## Equipe et contributions
 
 - Tawiya247: integration Sprint 4/Buffer, CLI avancée, docs finales.
