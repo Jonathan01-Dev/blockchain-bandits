@@ -16,6 +16,8 @@
     "sprint3:full:check": "node demo/sprint3-full-check.mjs",
     "sprint3:multi:check": "node demo/sprint3-multi-receivers-check.mjs",
     "sprint3:corrupt:check": "node demo/sprint3-corrupt-check.mjs",
+    "sprint3:quick:check": "npm run sprint3:core:check && npm run sprint3:protocol:check && npm run sprint3:download:check && npm run sprint3:corrupt:check",
+    "sprint3:all:check": "npm run sprint3:quick:check && npm run sprint3:multi:check && npm run sprint3:full:check",
     "sprint4:cli:check": "node demo/sprint4-cli-check.mjs"
   }
 }

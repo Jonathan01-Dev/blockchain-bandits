@@ -48,8 +48,9 @@ const seed3 = loadIdentity("seed3");
 const leechA = loadIdentity("leech-a");
 const leechB = loadIdentity("leech-b");
 
-const srcFile = join(root, "source_50mb.bin");
-writeFileSync(srcFile, randomBytes(50 * 1024 * 1024));
+const multiMb = Math.max(1, Number(process.env.SPRINT3_MULTI_MB ?? "12"));
+const srcFile = join(root, `source_${multiMb}mb.bin`);
+writeFileSync(srcFile, randomBytes(multiMb * 1024 * 1024));
 
 const sourceManifest = stageFileForTransfer({
   filePath: srcFile,
@@ -135,4 +136,5 @@ if (resB.fileHash !== sourceManifest.file_id) throw new Error("leech-b hash mism
 console.log(`file_hash=${sourceManifest.file_id}`);
 console.log(`leech_a_size=${resA.size}`);
 console.log(`leech_b_size=${resB.size}`);
+console.log(`source_mb=${multiMb}`);
 console.log("Sprint 3 multi-receivers check passed");

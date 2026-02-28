@@ -59,8 +59,9 @@ const seed2 = loadIdentity("seed2");
 const seed3 = loadIdentity("seed3");
 const leech = loadIdentity("leech");
 
+const downloadMb = Math.max(1, Number(process.env.SPRINT3_DOWNLOAD_MB ?? "4"));
 const srcFile = join(root, "source.bin");
-writeFileSync(srcFile, randomBytes(4 * 1024 * 1024 + 7));
+writeFileSync(srcFile, randomBytes(downloadMb * 1024 * 1024 + 7));
 
 const sourceManifest = stageFileForTransfer({
   filePath: srcFile,
@@ -163,4 +164,5 @@ await dNode.stop();
 
 console.log(`file_hash=${result.fileHash}`);
 console.log(`size=${result.size}`);
+console.log(`source_mb=${downloadMb}`);
 console.log("Sprint 3 download check passed");

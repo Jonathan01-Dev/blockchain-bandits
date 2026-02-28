@@ -36,8 +36,9 @@ const seed1 = loadIdentity("seed1");
 const seed2 = loadIdentity("seed2");
 const leech = loadIdentity("leech");
 
+const corruptMb = Math.max(1, Number(process.env.SPRINT3_CORRUPT_MB ?? "6"));
 const srcFile = join(root, "source.bin");
-writeFileSync(srcFile, randomBytes(6 * 1024 * 1024 + 33));
+writeFileSync(srcFile, randomBytes(corruptMb * 1024 * 1024 + 33));
 
 const sourceManifest = stageFileForTransfer({
   filePath: srcFile,
@@ -111,4 +112,5 @@ if (result.fileHash !== sourceManifest.file_id) {
 
 console.log(`file_hash=${result.fileHash}`);
 console.log(`size=${result.size}`);
+console.log(`source_mb=${corruptMb}`);
 console.log("Sprint 3 corrupt-chunk check passed");

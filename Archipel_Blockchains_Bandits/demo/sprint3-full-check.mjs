@@ -54,8 +54,9 @@ const seed2 = loadIdentity("seed2");
 const seed3 = loadIdentity("seed3");
 const leech = loadIdentity("leech");
 
-const srcFile = join(root, "source_50mb.bin");
-writeFileSync(srcFile, randomBytes(50 * 1024 * 1024));
+const fullMb = Math.max(1, Number(process.env.SPRINT3_FULL_MB ?? "50"));
+const srcFile = join(root, `source_${fullMb}mb.bin`);
+writeFileSync(srcFile, randomBytes(fullMb * 1024 * 1024));
 
 const sourceManifest = stageFileForTransfer({
   filePath: srcFile,
@@ -166,5 +167,6 @@ if (result.fileHash !== sourceManifest.file_id) throw new Error("final SHA misma
 
 console.log(`file_hash=${result.fileHash}`);
 console.log(`size=${result.size}`);
+console.log(`source_mb=${fullMb}`);
 console.log(`duration_ms=${Math.round(ms)}`);
 console.log("Sprint 3 full check passed");
