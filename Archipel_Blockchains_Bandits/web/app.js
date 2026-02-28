@@ -165,6 +165,115 @@ function afficherHistoriqueMessagerie(events) {
   zone.scrollTop = zone.scrollHeight;
 }
 
+function escapeHtml(text) {
+  return String(text ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function renderInlineMarkdown(text) {
+  let out = escapeHtml(text);
+  out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+  out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  out = out.replace(/(^|[\s(])\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g, '$1<a href="$3" target="_blank" rel="noopener noreferrer">$2</a>');
+  return out;
+}
+
+function renderMarkdownGemini(raw) {
+  const zone = elt("sortieAsk");
+  const source = String(raw ?? "").trim();
+  zone.innerHTML = "";
+
+  if (!source) {
+    zone.innerHTML = '<p class="ask-vide">(vide)</p>';
+    return;
+  }
+
+  const lines = source.split(/\r?\n/);
+  const html = [];
+  let inCode = false;
+  let listOpen = false;
+  let paraOpen = false;
+
+  const closePara = () => {
+    if (paraOpen) {
+      html.push("</p>");
+      paraOpen = false;
+    }
+  };
+  const closeList = () => {
+    if (listOpen) {
+      html.push("</ul>");
+      listOpen = false;
+    }
+  };
+
+  for (const lineRaw of lines) {
+    const line = lineRaw ?? "";
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      closePara();
+      closeList();
+      if (!inCode) {
+        inCode = true;
+        html.push('<pre><code>');
+      } else {
+        inCode = false;
+        html.push("</code></pre>");
+      }
+      continue;
+    }
+
+    if (inCode) {
+      html.push(`${escapeHtml(line)}\n`);
+      continue;
+    }
+
+    if (!trimmed) {
+      closePara();
+      closeList();
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      closePara();
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const listItem = trimmed.match(/^[-*]\s+(.*)$/);
+    if (listItem) {
+      closePara();
+      if (!listOpen) {
+        html.push("<ul>");
+        listOpen = true;
+      }
+      html.push(`<li>${renderInlineMarkdown(listItem[1])}</li>`);
+      continue;
+    }
+
+    closeList();
+    if (!paraOpen) {
+      html.push("<p>");
+      paraOpen = true;
+    } else {
+      html.push("<br/>");
+    }
+    html.push(renderInlineMarkdown(trimmed));
+  }
+
+  closePara();
+  closeList();
+  if (inCode) html.push("</code></pre>");
+  zone.innerHTML = html.join("");
+}
+
 function choisirCibleParDefaut(noeudSource) {
   return NOEUDS.find((n) => n.nom !== noeudSource) ?? NOEUDS[0];
 }
@@ -466,7 +575,7 @@ async function interrogerGemini() {
     contextMessages: entierOuNull(elt("ctxAskN").value),
     context: elt("ctxAsk").value.trim(),
   });
-  texte("sortieAsk", out.raw || "(vide)");
+  renderMarkdownGemini(out.raw || "");
   journal(`Gemini execute pour ${nodeName}`);
 }
 

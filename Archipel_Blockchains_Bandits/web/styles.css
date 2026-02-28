@@ -381,6 +381,81 @@ pre {
   color: #172942;
 }
 
+.ask-markdown {
+  margin: 8px 0 0;
+  min-height: 96px;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid #b7c8e2;
+  border-radius: 11px;
+  background: linear-gradient(180deg, #ffffff, #f5f9ff);
+  color: #16283f;
+  padding: 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.ask-markdown h1,
+.ask-markdown h2,
+.ask-markdown h3,
+.ask-markdown h4,
+.ask-markdown h5,
+.ask-markdown h6 {
+  margin: 0.6em 0 0.35em;
+  color: #0d2f57;
+}
+
+.ask-markdown p {
+  margin: 0.45em 0;
+}
+
+.ask-markdown ul {
+  margin: 0.4em 0;
+  padding-left: 1.25em;
+}
+
+.ask-markdown li {
+  margin: 0.2em 0;
+}
+
+.ask-markdown code {
+  border: 1px solid #cfdbed;
+  border-radius: 6px;
+  background: #f3f7fe;
+  padding: 1px 5px;
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.83rem;
+}
+
+.ask-markdown pre {
+  margin: 0.6em 0;
+  min-height: 0;
+  max-height: none;
+  border: 1px solid #21344f;
+  border-radius: 10px;
+  background: #0f1e30;
+  color: #d7e8ff;
+  padding: 10px;
+}
+
+.ask-markdown pre code {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font-size: 0.8rem;
+}
+
+.ask-markdown a {
+  color: #1f5fc6;
+  text-decoration: underline;
+}
+
+.ask-vide {
+  color: var(--muted);
+}
+
 .toast {
   position: fixed;
   right: 16px;
