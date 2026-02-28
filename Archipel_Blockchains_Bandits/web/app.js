@@ -322,6 +322,7 @@ async function envoyerMessage() {
     contextMessages: entierOuNull(elt("ctxMsg").value),
   });
   texte("sortieMsg", out.raw || "ok");
+  await rafraichirHistorique();
   journal(`Message envoye ${nodeName} -> ${toNodeId.slice(0, 12)}`);
 }
 
@@ -406,6 +407,22 @@ async function interrogerGemini() {
   journal(`Gemini execute pour ${nodeName}`);
 }
 
+async function rafraichirHistorique() {
+  const node = elt("noeudHistorique").value;
+  const direction = elt("directionHistorique").value;
+  const peer = elt("peerHistorique").value.trim();
+  const limit = entierOuNull(elt("limiteHistorique").value) ?? 100;
+  const qs = new URLSearchParams({
+    node,
+    limit: String(limit),
+  });
+  if (direction) qs.set("direction", direction);
+  if (peer) qs.set("peer", peer);
+  const out = await api(`/api/chat?${qs.toString()}`);
+  texte("sortieHistorique", out.raw || "(aucun message)");
+  journal(`Historique E2E rafraichi pour ${node}`);
+}
+
 async function autoRemplirIds() {
   for (const n of NOEUDS) {
     try {
@@ -482,6 +499,7 @@ function lierEvenements() {
   elt("btnTrustRevoke").addEventListener("click", () => executer("Trust revoke", revoquerTrust));
 
   elt("btnEnvoyerMsg").addEventListener("click", () => executer("Envoyer message", envoyerMessage));
+  elt("btnRefreshHistorique").addEventListener("click", () => executer("Rafraichir historique", rafraichirHistorique));
   elt("btnSend").addEventListener("click", () => executer("Envoyer fichier", envoyerFichier));
   elt("btnListerFichiers").addEventListener("click", () => executer("Lister fichiers", listerFichiers));
   elt("btnAutoFileId").addEventListener("click", () => {
@@ -498,7 +516,7 @@ function lierEvenements() {
 
   elt("btnAsk").addEventListener("click", () => executer("Gemini", interrogerGemini));
 
-  ["noeudEtat", "noeudMsg", "noeudSend", "noeudTrust", "noeudReceive", "noeudAsk"].forEach((id) => {
+  ["noeudEtat", "noeudMsg", "noeudSend", "noeudTrust", "noeudReceive", "noeudAsk", "noeudHistorique"].forEach((id) => {
     elt(id).addEventListener("change", () => {
       if (id === "noeudEtat") executer("Rafraichir etat", rafraichirEtatSelection);
       if (id === "noeudMsg") {
@@ -509,7 +527,11 @@ function lierEvenements() {
         remplirSelectCibles("noeudSendCible", elt("noeudSend").value);
         synchroniserCibleFichier();
       }
+      if (id === "noeudHistorique") executer("Rafraichir historique", rafraichirHistorique);
     });
+  });
+  ["directionHistorique", "peerHistorique", "limiteHistorique"].forEach((id) => {
+    elt(id).addEventListener("change", () => executer("Rafraichir historique", rafraichirHistorique));
   });
   elt("noeudMsgCible").addEventListener("change", synchroniserCibleMessage);
   elt("noeudSendCible").addEventListener("change", synchroniserCibleFichier);
@@ -535,6 +557,7 @@ async function init() {
   remplirSelectNoeuds("noeudSendCible");
   remplirSelectNoeuds("noeudReceive");
   remplirSelectNoeuds("noeudAsk");
+  remplirSelectNoeuds("noeudHistorique");
 
   elt("noeudEtat").value = "machine-1";
   elt("noeudTrust").value = "machine-1";
@@ -544,12 +567,14 @@ async function init() {
   remplirSelectCibles("noeudSendCible", "machine-1", "machine-2");
   elt("noeudReceive").value = "machine-2";
   elt("noeudAsk").value = "machine-1";
+  elt("noeudHistorique").value = "machine-1";
 
   lierEvenements();
   await testerApi();
   await executer("Rafraichir services", rafraichirServices);
   await executer("Rafraichir etat", rafraichirEtatSelection);
   await executer("Rafraichir trust", rafraichirTrust);
+  await executer("Rafraichir historique", rafraichirHistorique);
   await executer("Auto-remplir", autoRemplirIds);
   journal("Interface initialisee");
 }

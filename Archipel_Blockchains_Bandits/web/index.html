@@ -107,6 +107,28 @@
         <pre id="sortieMsg"></pre>
       </section>
 
+      <section class="carte" id="historiquePanel">
+        <div class="titre-ligne">
+          <h2>4.bis) Historique messages E2E</h2>
+          <button id="btnRefreshHistorique">Rafraichir historique</button>
+        </div>
+        <div class="stack">
+          <label for="noeudHistorique">Noeud</label>
+          <select id="noeudHistorique"></select>
+          <label for="directionHistorique">Direction</label>
+          <select id="directionHistorique">
+            <option value="">Toutes</option>
+            <option value="in">Entrants (in)</option>
+            <option value="out">Sortants (out)</option>
+          </select>
+          <label for="peerHistorique">Filtre peer (prefixe node_id, optionnel)</label>
+          <input id="peerHistorique" placeholder="ex: a1b2c3d4" />
+          <label for="limiteHistorique">Nombre max de messages</label>
+          <input id="limiteHistorique" type="number" min="1" max="500" value="100" />
+        </div>
+        <pre id="sortieHistorique"></pre>
+      </section>
+
       <section class="carte large" id="fichierPanel">
         <h2>5) Transfert de fichiers (chunk + offre + download)</h2>
         <div class="double">

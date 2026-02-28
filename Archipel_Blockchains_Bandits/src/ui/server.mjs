@@ -92,6 +92,7 @@ function getPaths(nodeName) {
     keysDir,
     trustFile: join(dataDir, `trust-${nodeName}.json`),
     peersFile: join(dataDir, `peers-${nodeName}.json`),
+    chatFile: join(dataDir, `chat-${nodeName}.jsonl`),
   };
 }
 
@@ -333,6 +334,47 @@ async function stopService({ service, nodeName }) {
 
 async function handleApi(req, res, url) {
   try {
+    if (req.method === "GET" && url.pathname === "/api/chat") {
+      const node = url.searchParams.get("node") ?? "machine-1";
+      const limit = Math.max(1, Number(url.searchParams.get("limit") ?? "100"));
+      const direction = stringField(url.searchParams.get("direction"), "");
+      const peer = stringField(url.searchParams.get("peer"), "");
+      const { chatFile } = getPaths(node);
+
+      if (!existsSync(chatFile)) {
+        sendJson(res, 200, { ok: true, events: [], raw: "" });
+        return;
+      }
+
+      const events = readFileSync(chatFile, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          try {
+            return JSON.parse(line);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .filter((e) => (direction ? String(e.direction ?? "") === direction : true))
+        .filter((e) => (peer ? String(e.peer ?? "").startsWith(peer) : true))
+        .slice(-limit);
+
+      const raw = events
+        .map((e) => {
+          const ts = e.ts ? new Date(e.ts).toISOString() : "";
+          const dir = e.direction ?? "evt";
+          const p = e.peer ? String(e.peer).slice(0, 12) : "-";
+          const text = e.text ?? "";
+          return `${ts} [${dir}] peer=${p} text=${text}`;
+        })
+        .join("\n");
+
+      sendJson(res, 200, { ok: true, events, raw });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/services") {
       const node = url.searchParams.get("node") ?? "machine-1";
       sendJson(res, 200, { ok: true, services: getNodeServices(node) });
