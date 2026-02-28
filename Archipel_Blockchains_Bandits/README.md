@@ -99,6 +99,9 @@ Aide rapide:
 node src/cli/archipel.mjs
 ```
 
+Mode d'emploi CLI complet (FR):
+- `docs/MODE_D_EMPLOI_CLI.md`
+
 ## UI Web Vanilla (bonus Sprint 4)
 
 Demarrage:
