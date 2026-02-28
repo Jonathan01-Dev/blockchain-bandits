@@ -4,7 +4,7 @@ Protocole P2P local, decentralise, chiffre, sans serveur central.
 
 ## Sprint courant
 
-- Sprint 1 termine
+- Sprint 2 termine
 
 ## Stack choisie (Sprint 0)
 
@@ -67,3 +67,21 @@ npm run sprint1:check
 ```
 
 Le script lance 3 noeuds locaux (`7777`, `7778`, `7779`) et valide que chaque noeud decouvre les 2 autres.
+
+## Livrables Sprint 2
+
+- Handshake authentifie sans CA (mode Noise-like): `HELLO -> HELLO_REPLY -> AUTH -> AUTH_OK`
+- Identite de noeud: Ed25519 (signature/verification)
+- Echange de cle de session: X25519 + HKDF-SHA256
+- Chiffrement de message: AES-256-GCM
+- Integrite/signature message: signature Ed25519 sur hash du message chiffre
+- Web of Trust (TOFU): stockage et verification de la cle publique par `node_id`
+- Demo Alice -> Bob:
+
+```powershell
+npm run sprint2:check
+```
+
+Le test valide:
+- Bob dechiffre correctement le message d'Alice
+- Le plaintext n'apparait pas dans les octets transportes
