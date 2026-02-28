@@ -110,7 +110,12 @@ export class ArchipelNode {
     const state = { buffer: Buffer.alloc(0) };
     this.tcpSockets.add(socket);
     socket.on("data", (chunk) => {
-      for (const frame of decodeFrames(state, chunk)) this.handleFrame(socket, frame);
+      try {
+        for (const frame of decodeFrames(state, chunk)) this.handleFrame(socket, frame);
+      } catch (err) {
+        this.log(`tcp frame decode fail: ${err.message}`);
+        socket.destroy();
+      }
     });
     socket.on("close", () => this.tcpSockets.delete(socket));
     socket.on("error", () => this.tcpSockets.delete(socket));

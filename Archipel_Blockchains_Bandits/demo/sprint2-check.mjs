@@ -5,28 +5,32 @@ import { resolve } from "node:path";
 import { SecureNode } from "../src/messaging/secure-node.mjs";
 
 const keysScript = resolve("src/crypto/generate-keys.mjs");
-execFileSync(process.execPath, [keysScript, "--node-name", "alice", "--force"], { stdio: "inherit" });
-execFileSync(process.execPath, [keysScript, "--node-name", "bob", "--force"], { stdio: "inherit" });
+execFileSync(process.execPath, [keysScript, "--node-name", "machine-1", "--force"], {
+  stdio: "inherit",
+});
+execFileSync(process.execPath, [keysScript, "--node-name", "machine-2", "--force"], {
+  stdio: "inherit",
+});
 
 const dataDir = ".archipel/sprint2";
-const alice = new SecureNode({ nodeName: "alice", host: "127.0.0.1", port: 8801, dataDir });
-const bob = new SecureNode({ nodeName: "bob", host: "127.0.0.1", port: 8802, dataDir });
+const machine1 = new SecureNode({ nodeName: "machine-1", host: "127.0.0.1", port: 8801, dataDir });
+const machine2 = new SecureNode({ nodeName: "machine-2", host: "127.0.0.1", port: 8802, dataDir });
 
-await bob.start();
-await alice.start();
+await machine2.start();
+await machine1.start();
 
-const secret = "HELLO_BOB_SECRET_MESSAGE";
-const messagePromise = once(bob, "message");
-const sent = await alice.sendEncryptedMessage({ host: "127.0.0.1", port: 8802, plaintext: secret });
+const secret = "HELLO_MACHINE_2_SECRET_MESSAGE";
+const messagePromise = once(machine2, "message");
+const sent = await machine1.sendEncryptedMessage({ host: "127.0.0.1", port: 8802, plaintext: secret });
 const [received] = await Promise.race([
   messagePromise,
   wait(6000).then(() => {
-    throw new Error("timeout waiting Bob message");
+    throw new Error("timeout waiting machine-2 message");
   }),
 ]);
 
-await alice.stop();
-await bob.stop();
+await machine1.stop();
+await machine2.stop();
 
 if (received.plaintext !== secret) {
   throw new Error("decrypted plaintext mismatch");

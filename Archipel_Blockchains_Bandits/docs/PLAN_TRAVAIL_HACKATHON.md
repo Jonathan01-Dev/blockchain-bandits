@@ -24,5 +24,5 @@
 
 - [Sprint 0] Plan cree et aligne sur les consignes officielles.
 - [Sprint 1] Couche reseau P2P implementee (UDP discovery + PEER_LIST TCP TLV + peer table persistante + keepalive) et test 3 noeuds valide.
-- [Sprint 2] Handshake secure + chiffrement AES-GCM + TOFU implementes et verifies via demo Alice/Bob.
+- [Sprint 2] Handshake secure + chiffrement AES-GCM + TOFU implementes et verifies via demo machine-1/machine-2.
 - [Sprint 3] Chunking, protocole CHUNK_REQ/CHUNK_DATA/ACK, download parallel rarest-first, fallback noeud deconnecte et verification SHA-256 finale.

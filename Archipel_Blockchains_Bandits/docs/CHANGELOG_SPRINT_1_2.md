@@ -57,7 +57,7 @@ Ajouter un canal chiffre E2E et authentifie sans CA centrale.
 - Web of Trust simplifie (TOFU):
 - stockage local des cles de pairs
 - verification de coherence aux reconnexions
-- Ajout du script de validation Alice -> Bob.
+- Ajout du script de validation machine-1 -> machine-2.
 
 ### Fichiers cles
 
@@ -73,7 +73,6 @@ Ajouter un canal chiffre E2E et authentifie sans CA centrale.
 
 - `npm run sprint2:check`
 - attendu:
-- Bob dechiffre le message d'Alice
+- machine-2 dechiffre le message de machine-1
 - `Sprint 2 check passed`
 - le plaintext n'apparait pas dans `wireHex`
-

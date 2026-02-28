@@ -1,5 +1,10 @@
+const MAX_FRAME_BYTES = 8 * 1024 * 1024;
+
 export function encodeFrame(type, payloadObj) {
   const payload = Buffer.from(JSON.stringify(payloadObj), "utf8");
+  if (payload.length > MAX_FRAME_BYTES) {
+    throw new Error(`frame too large: ${payload.length} bytes`);
+  }
   const header = Buffer.alloc(5);
   header.writeUInt8(type, 0);
   header.writeUInt32BE(payload.length, 1);
@@ -12,10 +17,17 @@ export function decodeFrames(socketState, chunk) {
   while (socketState.buffer.length >= 5) {
     const type = socketState.buffer.readUInt8(0);
     const len = socketState.buffer.readUInt32BE(1);
+    if (len > MAX_FRAME_BYTES) {
+      throw new Error(`frame length exceeds limit (${len} > ${MAX_FRAME_BYTES})`);
+    }
     if (socketState.buffer.length < 5 + len) break;
     const payloadRaw = socketState.buffer.subarray(5, 5 + len);
     socketState.buffer = socketState.buffer.subarray(5 + len);
-    frames.push({ type, payload: JSON.parse(payloadRaw.toString("utf8")) });
+    try {
+      frames.push({ type, payload: JSON.parse(payloadRaw.toString("utf8")) });
+    } catch {
+      throw new Error("invalid frame json");
+    }
   }
   return frames;
 }

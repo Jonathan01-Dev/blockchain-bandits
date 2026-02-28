@@ -31,6 +31,7 @@ export class ChunkDownloadManager {
     this.parallel = Math.max(1, parallel);
     this.maxAttemptsPerChunk = maxAttemptsPerChunk;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.chunkMetaByIndex = new Map(this.manifest.chunks.map((c) => [c.index, c]));
   }
 
   buildAvailability() {
@@ -77,7 +78,10 @@ export class ChunkDownloadManager {
         pending.delete(idx);
 
         try {
-          const chunkMeta = this.manifest.chunks[idx];
+          const chunkMeta = this.chunkMetaByIndex.get(idx);
+          if (!chunkMeta) {
+            throw new Error(`missing chunk metadata for index ${idx}`);
+          }
           const peersForChunk = [...(availability.get(idx) ?? [])].sort(
             (a, b) => (peerFailures.get(a.node_id) ?? 0) - (peerFailures.get(b.node_id) ?? 0)
           );

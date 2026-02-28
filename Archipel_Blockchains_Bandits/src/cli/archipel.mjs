@@ -67,9 +67,9 @@ if (cmd === "start") {
 } else {
   console.log("Usage:");
   console.log("  node src/cli/archipel.mjs start --node-name node-1 --port 7777");
-  console.log("  node src/cli/archipel.mjs secure-listen --node-name bob --port 8802");
+  console.log("  node src/cli/archipel.mjs secure-listen --node-name machine-2 --port 8802");
   console.log(
-    "  node src/cli/archipel.mjs secure-send --node-name alice --to-host 127.0.0.1 --to-port 8802 --message hello"
+    "  node src/cli/archipel.mjs secure-send --node-name machine-1 --to-host 127.0.0.1 --to-port 8802 --message hello"
   );
   process.exit(1);
 }

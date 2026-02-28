@@ -28,22 +28,40 @@ const HANDSHAKE_MAX_SKEW_MS = Number(process.env.ARCHIPEL_HANDSHAKE_MAX_SKEW_MS 
 
 function waitForFrame(socketState, type, timeoutMs = 5000) {
   return new Promise((resolvePromise, rejectPromise) => {
-    const timer = setTimeout(() => rejectPromise(new Error(`timeout waiting frame ${type}`)), timeoutMs);
+    let settled = false;
+    let waiter = null;
+    const cleanupWaiter = () => {
+      if (!waiter) return;
+      const idx = socketState.waiters.indexOf(waiter);
+      if (idx >= 0) socketState.waiters.splice(idx, 1);
+      waiter = null;
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanupWaiter();
+      rejectPromise(new Error(`timeout waiting frame ${type}`));
+    }, timeoutMs);
     const queued = socketState.frames.findIndex((f) => f.type === type);
     if (queued >= 0) {
+      settled = true;
       clearTimeout(timer);
       const frame = socketState.frames.splice(queued, 1)[0];
       resolvePromise(frame);
       return;
     }
-    socketState.waiters.push({
+    waiter = {
       type,
       done: (err, frame) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
+        cleanupWaiter();
         if (err) rejectPromise(err);
         else resolvePromise(frame);
       },
-    });
+    };
+    socketState.waiters.push(waiter);
   });
 }
 
@@ -58,6 +76,13 @@ function feedFrames(socketState, chunk) {
     } else {
       socketState.frames.push(frame);
     }
+  }
+}
+
+function rejectAllWaiters(socketState, err) {
+  while (socketState.waiters.length > 0) {
+    const w = socketState.waiters.shift();
+    w.done(err);
   }
 }
 
@@ -126,11 +151,26 @@ export class SecureNode extends EventEmitter {
       lastRawHex: "",
       ended: false,
     };
-    socket.on("data", (chunk) => feedFrames(socketState, chunk));
     socket.on("end", () => {
       socketState.ended = true;
+      rejectAllWaiters(socketState, new Error("socket ended"));
     });
-    socket.on("error", () => {});
+    socket.on("close", () => {
+      socketState.ended = true;
+      rejectAllWaiters(socketState, new Error("socket closed"));
+    });
+    socket.on("error", (err) => {
+      socketState.ended = true;
+      rejectAllWaiters(socketState, err);
+    });
+    socket.on("data", (chunk) => {
+      try {
+        feedFrames(socketState, chunk);
+      } catch (err) {
+        rejectAllWaiters(socketState, err);
+        socket.destroy();
+      }
+    });
 
     try {
       const session = await this.responderHandshake(socket, socketState);
@@ -203,8 +243,16 @@ export class SecureNode extends EventEmitter {
   async sendEncryptedMessage({ host, port, plaintext }) {
     const socket = net.createConnection({ host, port: Number(port) });
     const socketState = { buffer: Buffer.alloc(0), frames: [], waiters: [], lastRawHex: "" };
-    socket.on("data", (chunk) => feedFrames(socketState, chunk));
-    socket.on("error", () => {});
+    socket.on("data", (chunk) => {
+      try {
+        feedFrames(socketState, chunk);
+      } catch (err) {
+        rejectAllWaiters(socketState, err);
+        socket.destroy();
+      }
+    });
+    socket.on("error", (err) => rejectAllWaiters(socketState, err));
+    socket.on("close", () => rejectAllWaiters(socketState, new Error("socket closed")));
 
     await new Promise((resolvePromise, rejectPromise) => {
       socket.once("connect", resolvePromise);

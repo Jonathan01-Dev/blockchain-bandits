@@ -7,21 +7,39 @@ import { ACK_STATUS, TRANSFER_FRAME_TYPE } from "./protocol.mjs";
 
 function waitForFrame(state, type, timeoutMs = 5000) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timeout waiting frame ${type}`)), timeoutMs);
+    let settled = false;
+    let waiter = null;
+    const cleanupWaiter = () => {
+      if (!waiter) return;
+      const idx = state.waiters.indexOf(waiter);
+      if (idx >= 0) state.waiters.splice(idx, 1);
+      waiter = null;
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanupWaiter();
+      reject(new Error(`timeout waiting frame ${type}`));
+    }, timeoutMs);
     const queued = state.frames.findIndex((f) => f.type === type);
     if (queued >= 0) {
+      settled = true;
       clearTimeout(timer);
       resolve(state.frames.splice(queued, 1)[0]);
       return;
     }
-    state.waiters.push({
+    waiter = {
       type,
       done: (err, frame) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
+        cleanupWaiter();
         if (err) reject(err);
         else resolve(frame);
       },
-    });
+    };
+    state.waiters.push(waiter);
   });
 }
 
@@ -34,6 +52,13 @@ function feedFrames(state, chunk) {
     } else {
       state.frames.push(frame);
     }
+  }
+}
+
+function rejectAllWaiters(state, err) {
+  while (state.waiters.length > 0) {
+    const w = state.waiters.shift();
+    w.done(err);
   }
 }
 
@@ -74,8 +99,16 @@ export class ChunkTransferNode extends EventEmitter {
 
   async handleIncoming(socket) {
     const state = { buffer: Buffer.alloc(0), frames: [], waiters: [] };
-    socket.on("data", (chunk) => feedFrames(state, chunk));
-    socket.on("error", () => {});
+    socket.on("data", (chunk) => {
+      try {
+        feedFrames(state, chunk);
+      } catch (err) {
+        rejectAllWaiters(state, err);
+        socket.destroy();
+      }
+    });
+    socket.on("error", (err) => rejectAllWaiters(state, err));
+    socket.on("close", () => rejectAllWaiters(state, new Error("socket closed")));
     try {
       const reqFrame = await waitForFrame(state, TRANSFER_FRAME_TYPE.CHUNK_REQ, 15000);
       const req = reqFrame.payload;
@@ -119,8 +152,16 @@ export class ChunkTransferNode extends EventEmitter {
   async requestChunk({ host, port, fileId, chunkIdx, requesterNodeId, timeoutMs = 10000 }) {
     const socket = net.createConnection({ host, port: Number(port) });
     const state = { buffer: Buffer.alloc(0), frames: [], waiters: [] };
-    socket.on("data", (chunk) => feedFrames(state, chunk));
-    socket.on("error", () => {});
+    socket.on("data", (chunk) => {
+      try {
+        feedFrames(state, chunk);
+      } catch (err) {
+        rejectAllWaiters(state, err);
+        socket.destroy();
+      }
+    });
+    socket.on("error", (err) => rejectAllWaiters(state, err));
+    socket.on("close", () => rejectAllWaiters(state, new Error("socket closed")));
 
     await new Promise((resolve, reject) => {
       socket.once("connect", resolve);

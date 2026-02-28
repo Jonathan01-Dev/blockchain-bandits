@@ -29,19 +29,19 @@ Voir [docs/protocol-spec.md](docs/protocol-spec.md).
 
 1. Copier l'environnement:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 ```
 
 2. Generer les cles locales Ed25519:
 
-```powershell
+```bash
 node src/crypto/generate-keys.mjs --node-name node-1
 ```
 
 3. (Optionnel) Regenerer en ecrasant:
 
-```powershell
+```bash
 node src/crypto/generate-keys.mjs --node-name node-1 --force
 ```
 
@@ -62,7 +62,7 @@ node src/crypto/generate-keys.mjs --node-name node-1 --force
 - Affichage peer table en console (log periodique)
 - Verification 3 noeuds:
 
-```powershell
+```bash
 npm run sprint1:check
 ```
 
@@ -70,9 +70,9 @@ Le script lance 3 noeuds locaux (`7777`, `7778`, `7779`) et valide que chaque no
 
 ## Commandes secure (Sprint 2)
 
-```powershell
-node src/cli/archipel.mjs secure-listen --node-name bob --port 8802
-node src/cli/archipel.mjs secure-send --node-name alice --to-host 127.0.0.1 --to-port 8802 --message Bonjour
+```bash
+node src/cli/archipel.mjs secure-listen --node-name machine-2 --port 8802
+node src/cli/archipel.mjs secure-send --node-name machine-1 --to-host 127.0.0.1 --to-port 8802 --message Bonjour
 ```
 
 ## Livrables Sprint 2
@@ -83,14 +83,14 @@ node src/cli/archipel.mjs secure-send --node-name alice --to-host 127.0.0.1 --to
 - Chiffrement de message: AES-256-GCM
 - Integrite/signature message: signature Ed25519 sur hash du message chiffre
 - Web of Trust (TOFU): stockage et verification de la cle publique par `node_id`
-- Demo Alice -> Bob:
+- Demo machine-1 -> machine-2:
 
-```powershell
+```bash
 npm run sprint2:check
 ```
 
 Le test valide:
-- Bob dechiffre correctement le message d'Alice
+- machine-2 dechiffre correctement le message de machine-1
 - Le plaintext n'apparait pas dans les octets transportes
 
 ## Livrables Sprint 3
@@ -110,6 +110,7 @@ Le test valide:
 Commandes de test Sprint 3:
 
 ```bash
+npm run sprint3:check
 npm run sprint3:core:check
 npm run sprint3:protocol:check
 npm run sprint3:download:check
