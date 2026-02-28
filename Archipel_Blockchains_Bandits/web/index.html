@@ -179,28 +179,30 @@
         </div>
       </section>
 
-      <section class="carte" id="geminiPanel">
-        <h2>6) Gemini direct (optionnel)</h2>
-        <p class="aide">Autorise Internet uniquement pour Gemini. Le reste du protocole reste local.</p>
-        <div class="stack">
-          <label for="noeudAsk">Noeud</label>
-          <select id="noeudAsk"></select>
-          <label for="promptAsk">Question</label>
-          <textarea id="promptAsk" rows="3" placeholder="resume l'etat du noeud"></textarea>
-          <label for="ctxAskN">Contexte auto: derniers N messages</label>
-          <input id="ctxAskN" type="number" min="1" max="200" value="12" />
-          <label for="ctxAsk">Contexte manuel (optionnel)</label>
-          <textarea id="ctxAsk" rows="3"></textarea>
-          <label class="check"><input id="flagNoAiAsk" type="checkbox" /> Forcer mode sans IA (--no-ai)</label>
-        </div>
-        <button id="btnAsk">Interroger Gemini</button>
-        <div id="sortieAsk" class="ask-markdown" aria-live="polite"></div>
-      </section>
+      <div class="rangee-large">
+        <section class="carte" id="geminiPanel">
+          <h2>6) Gemini direct (optionnel)</h2>
+          <p class="aide">Autorise Internet uniquement pour Gemini. Le reste du protocole reste local.</p>
+          <div class="stack">
+            <label for="noeudAsk">Noeud</label>
+            <select id="noeudAsk"></select>
+            <label for="promptAsk">Question</label>
+            <textarea id="promptAsk" rows="3" placeholder="resume l'etat du noeud"></textarea>
+            <label for="ctxAskN">Contexte auto: derniers N messages</label>
+            <input id="ctxAskN" type="number" min="1" max="200" value="12" />
+            <label for="ctxAsk">Contexte manuel (optionnel)</label>
+            <textarea id="ctxAsk" rows="3"></textarea>
+            <label class="check"><input id="flagNoAiAsk" type="checkbox" /> Forcer mode sans IA (--no-ai)</label>
+          </div>
+          <button id="btnAsk">Interroger Gemini</button>
+          <div id="sortieAsk" class="ask-markdown" aria-live="polite"></div>
+        </section>
 
-      <section class="carte" id="journalPanel">
-        <h2>Journal des actions UI</h2>
-        <pre id="journalUi"></pre>
-      </section>
+        <section class="carte" id="journalPanel">
+          <h2>Journal des actions UI</h2>
+          <pre id="journalUi"></pre>
+        </section>
+      </div>
     </main>
 
     <div id="toast" class="toast cache"></div>

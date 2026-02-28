@@ -214,6 +214,17 @@ h3 {
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
 }
 
+.rangee-large {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.rangee-large > .carte {
+  margin: 0;
+}
+
 label {
   font-size: 0.8rem;
   font-weight: 700;
@@ -518,5 +529,10 @@ pre {
 
   .rangee > * {
     flex: 1 1 100%;
+  }
+
+  .rangee-large {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 }
